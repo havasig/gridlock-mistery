@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Murdoku párbaj</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<style>
+/* Layout: chart table — the map is the working surface, the roster sits beside it like a case file. */
+:root{
+  --bg:#f7f2df; --paper:#fffbea; --ink:#2a2620; --muted:#6e6553; --line:#d9cfb0;
+  --sea:#2f6b86; --rope:#8a5a2b; --danger:#c0392b; --ok:#2e7d4f; --sel:#e0a526;
+  --display:"IM Fell English SC", Georgia, serif;
+  --body:"Alegreya Sans", "Segoe UI", system-ui, sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#141a1f; --paper:#1d252c; --ink:#ece4cf; --muted:#a59b84; --line:#34404a;
+  --sea:#6fb3d2; --rope:#d39a5e; --danger:#ff6b5b; --ok:#5fc68a; --sel:#f2bd45; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.4;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+.wrap{max-width:1500px;margin:0 auto;padding-inline:16px;padding-block:14px 40px}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(26px,4vw,40px);margin:0;letter-spacing:.02em}
+h2{font-family:var(--display);font-weight:400;font-size:21px;margin:0 0 8px}
+.sub{color:var(--muted);font-size:14px}
+.btn{font:inherit;font-size:14px;font-weight:500;border:1.5px solid var(--line);background:var(--paper);color:var(--ink);padding:6px 11px;border-radius:7px;cursor:pointer;display:inline-flex;gap:6px;align-items:center;min-height:34px;white-space:nowrap}
+.btn:hover{border-color:var(--rope)}
+.btn:focus-visible,.card:focus-visible{outline:2px solid var(--sel);outline-offset:1px}
+.btn[aria-pressed="true"],.btn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.btn.danger{color:var(--danger)}
+.panel{background:var(--paper);border:1.5px solid var(--line);border-radius:10px;padding:12px 14px}
+input[type=text]{font:inherit;padding:7px 10px;border-radius:7px;border:1.5px solid var(--line);background:var(--paper);color:var(--ink);min-width:0}
+.toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:8px 14px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20;max-width:90vw;text-align:center}
+.toast.on{opacity:1}
+
+/* ---------- home ---------- */
+.homehead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:14px}
+.players{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.homegrid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:900px){.homegrid{grid-template-columns:minmax(0,1fr)}}
+.plist{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+.pcard{text-align:left;font:inherit;color:inherit;background:var(--paper);border:1.5px solid var(--line);border-radius:10px;padding:10px;cursor:pointer;display:grid;gap:4px}
+.pcard:hover{border-color:var(--rope)}
+.pcard .t{font-family:var(--display);font-size:18px}
+.pcard .meta{font-size:12.5px;color:var(--muted)}
+.pcard .st{font-size:13px;font-variant-numeric:tabular-nums}
+.pcard .st.ok{color:var(--ok);font-weight:700}
+.lvl{grid-column:1/-1;font-family:var(--display);font-weight:400;font-size:19px;margin:10px 0 0;display:flex;gap:8px;align-items:baseline}
+.lvl:first-child{margin-top:0}
+.pill.src{border-color:var(--ok);color:var(--ok)}
+.pill{display:inline-block;font-size:11px;padding:1px 7px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.cmp{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums}
+.cmp th,.cmp td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.cmp th{font-weight:700;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.cmp td.win{background:color-mix(in srgb,var(--ok) 16%,transparent);font-weight:700}
+.cmp tfoot td{font-weight:700;border-bottom:none}
+.tablewrap{overflow-x:auto}
+.share{display:grid;gap:8px;margin-top:10px}
+.share textarea{width:100%;font:12px/1.3 ui-monospace,monospace;border-radius:7px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);padding:6px;resize:vertical;min-height:54px}
+.note{font-size:13px;color:var(--muted)}
+
+/* ---------- game ---------- */
+.gamehead{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;margin-bottom:8px}
+.gamehead .l{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.stats{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.stat{border:1.5px solid var(--line);background:var(--paper);border-radius:8px;padding:3px 10px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.stat b{color:var(--ink);font-size:16px}
+.layout{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:start;--mapw:min(calc(100vh - 190px),58vw)}
+@media (max-width:999px){.layout{grid-template-columns:minmax(0,1fr);--mapw:calc(100vw - 32px - 30px)}}
+main.board{width:calc(var(--mapw) + 30px);max-width:100%;min-width:0}
+.toolbar{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-bottom:6px}
+.status{font-size:13px;color:var(--muted);min-height:18px;margin:0 0 4px}
+.status b{color:var(--ink)}
+.mapscroll{overflow:auto;max-width:100%}
+.mapframe{display:grid;grid-template-columns:26px 1fr;grid-template-rows:20px 1fr;width:calc((var(--mapw) + 26px) * var(--zoom,1))}
+.collabels{grid-column:2;display:grid;grid-template-columns:repeat(var(--n),1fr);font-size:11px;color:var(--muted);text-align:center;align-items:end}
+.rowlabels{grid-row:2;display:grid;grid-template-rows:repeat(var(--n),1fr);font-size:11px;color:var(--muted);align-items:center;text-align:right;padding-right:4px}
+.lab.hot{color:var(--ink);font-weight:700}
+.lab.bad{color:var(--danger);font-weight:700}
+.map{grid-column:2;grid-row:2;position:relative;aspect-ratio:1/1;background:center/100% 100% no-repeat;border:2px solid #2a2620;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
+.grid{position:absolute;inset:0;display:grid;grid-template-columns:repeat(var(--n),1fr);grid-template-rows:repeat(var(--n),1fr)}
+.cell{position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.cell:hover{background:rgba(224,165,38,.28)}
+.cell.cross{background:rgba(224,165,38,.12)}
+.cell.shaded{background:rgba(30,30,30,.30)}
+.cell::before{content:"";position:absolute;inset:0;pointer-events:none}
+.cell.blocked::before{background:rgba(55,55,55,.5);-webkit-backdrop-filter:grayscale(1);backdrop-filter:grayscale(1)}
+.cell.hlarea::before{background:repeating-linear-gradient(45deg,rgba(255,200,40,.55) 0 3px,rgba(255,200,40,.12) 3px 8px);box-shadow:inset 0 0 0 1px rgba(255,200,40,.6)}
+.cell.hlobj{z-index:1;box-shadow:inset 0 0 0 3px #ffd23f,0 0 10px 3px rgba(255,210,63,.95)}
+.cell.blocked.hlobj::before{background:rgba(255,210,63,.18);-webkit-backdrop-filter:none;backdrop-filter:none}
+.cell .x{position:absolute;inset:14%;pointer-events:none}
+.cell .x::before,.cell .x::after{content:"";position:absolute;left:50%;top:-4%;width:12%;height:108%;background:#c0392b;border-radius:2px;transform:translateX(-50%) rotate(45deg);box-shadow:0 0 0 1px rgba(255,255,255,.7)}
+.cell .x::after{transform:translateX(-50%) rotate(-45deg)}
+.cell .x.auto{inset:20%;opacity:.8}
+.cands{position:absolute;inset:2px;display:flex;flex-wrap:wrap;align-content:flex-start;gap:1px;pointer-events:none;font-weight:700;font-size:calc(var(--cell,40px)*.24);line-height:1}
+.cands i{font-style:normal;color:#fff;background:var(--pc);border-radius:3px;padding:1px 2px;min-width:1em;text-align:center;box-shadow:0 0 0 1px rgba(255,255,255,.75)}
+.cands i.me{position:relative;z-index:2;transform:scale(1.3);box-shadow:0 0 0 1.5px #fff,0 0 0 3.5px #111;margin:1px 2px}
+.cands i.done{opacity:.3}
+.cell.pressing::after{content:"";position:absolute;inset:0;border-radius:50%;border:3px solid #e0a526;animation:press .45s linear forwards;pointer-events:none}
+@keyframes press{from{transform:scale(.2);opacity:.3}to{transform:scale(1);opacity:1}}
+.token{position:absolute;inset:4%;border-radius:50%;background:#fffbea center/cover no-repeat;border:3px solid #2a2620;box-shadow:0 1px 3px rgba(0,0,0,.5);pointer-events:none}
+.token.bad{box-shadow:0 0 0 3px #e02b1a}
+.token.flash{animation:pop .35s ease-out}
+@keyframes pop{from{transform:scale(.5)}to{transform:scale(1)}}
+.zoomrow{display:flex;gap:5px;align-items:center;margin-top:6px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+aside{display:flex;flex-direction:column;gap:8px;min-width:0}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:5px}
+.card{--pc:#888;display:grid;grid-template-columns:38px 1fr;gap:7px;align-items:start;text-align:left;font:inherit;color:inherit;background:transparent;border:1.5px solid var(--line);border-radius:8px;padding:5px 6px;cursor:pointer;min-width:0}
+.card:hover{border-color:var(--rope)}
+.card.sel{border-color:var(--pc);box-shadow:0 0 0 2px var(--pc);background:color-mix(in srgb,var(--pc) 14%,transparent)}
+.card .pic{position:relative;width:38px;height:38px;border-radius:50%;background:#fffbea center/cover;border:2.5px solid var(--pc)}
+.card.bad .pic{box-shadow:0 0 0 2.5px var(--danger)}
+.card .badge{position:absolute;right:-5px;bottom:-4px;font:700 10.5px/1 var(--body);color:#fff;background:var(--pc);border-radius:4px;padding:2px 3px;box-shadow:0 0 0 1.5px var(--paper)}
+.card .nm{font-family:var(--display);font-size:15px;line-height:1.1;display:flex;justify-content:space-between;gap:4px}
+.card .nm em{font-family:var(--body);font-style:normal;font-size:11px;color:var(--ok);white-space:nowrap}
+.card .nm small{font-family:var(--body);font-size:11px;color:var(--muted)}
+.card .clue{font-size:12px;color:var(--muted);line-height:1.25;margin-top:1px;overflow-wrap:anywhere}
+.card .clue b{color:var(--ink)}
+.answer{display:flex;gap:8px}
+.ansbox{flex:1;display:flex;justify-content:center;align-items:baseline;gap:8px;border:2px solid var(--line);border-radius:8px;padding:3px 6px}
+.ansbox span{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.ansbox b{font-family:var(--display);font-size:20px;font-weight:400}
+.ansbox.set{border-color:var(--sel)}
+.rules{font-size:13.5px;color:var(--muted)}
+.rules summary{cursor:pointer}
+.rules ul{margin:6px 0 0;padding-left:18px;display:grid;gap:3px}
+.rules b{color:var(--ink)}
+.confirm{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:14px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:30}
+.modal .panel{max-width:420px;width:100%;display:grid;gap:10px;text-align:center}
+.modal .big{font-family:var(--display);font-size:30px}
+@media (prefers-reduced-motion:reduce){.token.flash{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ================= HOME ================= -->
+<section id="home">
+  <div class="homehead">
+    <div><h1>Murdoku párbaj</h1><div class="sub">Logikai gyilkossági rejtvények kettőtöknek</div></div>
+    <div class="players" id="players"></div>
+  </div>
+  <div class="homegrid">
+    <div class="panel">
+      <h2>Feladványok</h2>
+      <div class="plist" id="plist"></div>
+    </div>
+    <div class="panel">
+      <h2>Összehasonlítás</h2>
+      <div class="tablewrap"><table class="cmp" id="cmp"></table></div>
+      <p class="note">Pontidő = idő + 30 mp minden sikertelen ellenőrzésért. Feladványonként a kisebb pontidő nyer.</p>
+      <div class="share">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn primary" id="shareBtn" type="button">Eredményeim küldése</button>
+          <button class="btn" id="importToggle" type="button">Kapott link beillesztése</button>
+        </div>
+        <div id="importBox" hidden>
+          <textarea id="importText" placeholder="Illeszd be ide a kapott linket"></textarea>
+          <button class="btn" id="importBtn" type="button">Beolvasás</button>
+        </div>
+        <p class="note">Ha külön telefonon játszotok: küldd el a linket a másiknak (pl. Messengeren). Ha megnyitja, a te eredményeid bekerülnek az ő táblázatába. Ha egy eszközön játszotok, nem kell semmit küldeni.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= GAME ================= -->
+<section id="game" hidden>
+  <div class="gamehead">
+    <div class="l">
+      <button class="btn" id="backBtn" type="button">← Feladványok</button>
+      <h1 id="gTitle" style="font-size:26px"></h1>
+      <span class="sub" id="gPlayer"></span>
+    </div>
+    <div class="stats">
+      <div class="stat">Idő <b id="sTime">0:00</b></div>
+      <div class="stat">Ellenőrzés <b id="sChecks">0</b></div>
+      <button class="btn primary" id="checkBtn" type="button">Ellenőrzés</button>
+    </div>
+  </div>
+  <div class="layout">
+    <main class="board">
+      <div class="toolbar" role="toolbar" aria-label="Eszközök">
+        <button class="btn" data-tool="sketch" type="button" aria-pressed="true">✎ Vázlat</button>
+        <button class="btn" data-tool="place" type="button">● Bábu</button>
+        <button class="btn" data-tool="x" type="button">✕ Kizár</button>
+        <button class="btn" data-tool="erase" type="button">⌫ Radír</button>
+        <button class="btn" id="undoBtn" type="button">↶ Vissza</button>
+        <span id="resetWrap"></span>
+      </div>
+      <div class="status" id="status"></div>
+      <div class="mapscroll"><div class="mapframe" id="mapframe">
+        <div class="collabels" id="collabels"></div>
+        <div class="rowlabels" id="rowlabels"></div>
+        <div class="map" id="map"><div class="grid" id="grid"></div></div>
+      </div></div>
+      <div class="zoomrow">
+        <button class="btn" data-zoom="1" type="button">100%</button>
+        <button class="btn" data-zoom="1.5" type="button">150%</button>
+        <button class="btn" id="shadeBtn" type="button">Árnyékolás</button>
+        <button class="btn" id="blockBtn" type="button">Tiltott mezők</button>
+        <button class="btn" id="hlBtn" type="button">Kiemelés</button>
+      </div>
+    </main>
+    <aside>
+      <div class="panel">
+        <div class="answer">
+          <div class="ansbox" id="ansVic"><span>Áldozat</span><b>—</b></div>
+          <div class="ansbox" id="ansKill"><span>Gyilkos</span><b>—</b></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2 style="font-size:18px">Szereplők <span class="sub" style="font-family:var(--body)">— koppintás: lehetséges hely · hosszú nyomás: biztos</span></h2>
+        <div class="cards" id="cards"></div>
+      </div>
+      <details class="panel rules">
+        <summary><b>Szabályok</b></summary>
+        <ul>
+          <li>Minden <b>sorban és oszlopban pontosan egy</b> szereplő van (a gyanúsítottak és az áldozat).</li>
+          <li><b>„Mellett”:</b> közvetlenül fölötte, alatta, balra vagy jobbra (átlósan nem), ugyanabban a területben.</li>
+          <li><b>„Északabbra”</b> = feljebb lévő sorban, bármelyik oszlopban. <b>„Nyugatabbra”</b> = balrább lévő oszlopban.</li>
+          <li>Senki nem állhat <b>nem foglalható tárgyon</b>. Székre és padra lehet ülni.</li>
+          <li>Az <b>áldozat az utolsó szabad mezőn</b> van, és a területén <b>egyedül a gyilkos</b> volt vele.</li>
+          <li>A <b>Csónak</b> külön terület a Tavon belül.</li>
+        </ul>
+      </details>
+    </aside>
+  </div>
+</section>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<div class="modal" id="modal" hidden><div class="panel" id="modalBody"></div></div>
+
+<script src="puzzles.js"></script>
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const DATA=window.MURDOKU;
+const PENALTY=30;
+const VICTIM="Áldozat";
+/* ---------------- storage ---------------- */
+const LS={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v);}catch(e){return d;}},
+          set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}};
+let players=LS.get("md.players",[]), me=LS.get("md.me",null);
+let rivals=LS.get("md.rivals",{}); // name -> {u, r:{pid:{t,c,s}}}
+const progKey=(p,pid)=>`md.p.${p}.${pid}`;
+const loadProg=(p,pid)=>LS.get(progKey(p,pid),null);
+let toastT; function toast(m){const t=$("#toast"); t.textContent=m; t.classList.add("on"); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("on"),2200);}
+const fmt=s=>{s=Math.max(0,Math.round(s)); const h=Math.floor(s/3600), m=Math.floor(s/60)%60, x=s%60; return (h?h+":"+String(m).padStart(2,"0"):m)+":"+String(x).padStart(2,"0");};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ---------------- sha256 (tiny) ---------------- */
+function sha256(ascii){
+  function rr(v,a){return (v>>>a)|(v<<(32-a));}
+  const bytes=new TextEncoder().encode(ascii); const words=[]; const bl=bytes.length*8;
+  const K=[],H=[]; let n=2;
+  const isP=x=>{for(let i=2;i*i<=x;i++) if(x%i===0) return false; return true;};
+  while(K.length<64){ if(isP(n)){ if(H.length<8) H.push((Math.pow(n,1/2)*4294967296)|0); K.push((Math.pow(n,1/3)*4294967296)|0);} n++; }
+  const arr=Array.from(bytes); arr.push(0x80); while(arr.length%64!==56) arr.push(0);
+  for(let i=7;i>=0;i--) arr.push(i>3?0:(bl>>>(i*8))&255);
+  for(let i=0;i<arr.length;i+=4) words.push((arr[i]<<24)|(arr[i+1]<<16)|(arr[i+2]<<8)|arr[i+3]);
+  const hash=H.slice();
+  for(let j=0;j<words.length;j+=16){
+    const w=words.slice(j,j+16); const old=hash.slice();
+    for(let i=0;i<64;i++){
+      if(i>=16){const w15=w[i-15],w2=w[i-2];
+        w[i]=(w[i-16]+(rr(w15,7)^rr(w15,18)^(w15>>>3))+w[i-7]+(rr(w2,17)^rr(w2,19)^(w2>>>10)))|0;}
+      const a=hash[0],e=hash[4];
+      const t1=(hash[7]+(rr(e,6)^rr(e,11)^rr(e,25))+((e&hash[5])^(~e&hash[6]))+K[i]+w[i])|0;
+      const t2=((rr(a,2)^rr(a,13)^rr(a,22))+((a&hash[1])^(a&hash[2])^(hash[1]&hash[2])))|0;
+      hash.unshift((t1+t2)|0); hash[4]=(hash[4]+t1)|0; hash.pop();
+    }
+    for(let i=0;i<8;i++) hash[i]=(hash[i]+old[i])|0;
+  }
+  return hash.map(h=>(h>>>0).toString(16).padStart(8,"0")).join("");
+}
+
+/* ---------------- artwork (own SVG) ---------------- */
+const CS=100;
+function rnd(seed){let s=seed%2147483647; if(s<=0)s+=2147483646; return ()=>(s=s*16807%2147483647)/2147483647;}
+const FLOOR={grass:"#9fce86",wood:"#c79a68",carpet:"#b4656a",checker:"#efe5cf",water:"#8fcbe5",boat:"#8fcbe5",glass:"#cfe5da",planks:"#dcb98a",stone:"#d4cfc4"};
+function floorCell(st,r,c,seed){
+  const x=(c-1)*CS,y=(r-1)*CS,R=rnd(r*131+c*977+seed); let s=`<rect x="${x}" y="${y}" width="${CS}" height="${CS}" fill="${FLOOR[st]}"/>`;
+  if(st==="grass") for(let i=0;i<9;i++){const px=x+8+R()*84,py=y+10+R()*80; s+=`<path d="M${px} ${py} l-3 -9 M${px} ${py} l3 -8" stroke="#7db368" stroke-width="2.4" stroke-linecap="round" fill="none"/>`;}
+  if(st==="wood"||st==="planks"){const d=st==="wood"?"#a97f52":"#bf9b6c"; for(let i=1;i<4;i++) s+=`<line x1="${x}" y1="${y+i*25}" x2="${x+CS}" y2="${y+i*25}" stroke="${d}" stroke-width="2"/>`;
+    for(let i=0;i<4;i++){const ox=x+((i*37+r*23+c*11)%90)+5; s+=`<line x1="${ox}" y1="${y+i*25}" x2="${ox}" y2="${y+i*25+25}" stroke="${d}" stroke-width="2"/>`;}}
+  if(st==="carpet") s+=`<path d="M${x+50} ${y+14} L${x+86} ${y+50} L${x+50} ${y+86} L${x+14} ${y+50} Z" fill="none" stroke="#d8a25a" stroke-width="3" opacity=".75"/><circle cx="${x+50}" cy="${y+50}" r="6" fill="#d8a25a" opacity=".75"/>`;
+  if(st==="checker") for(let i=0;i<2;i++)for(let j=0;j<2;j++) if((i+j)%2) s+=`<rect x="${x+i*50}" y="${y+j*50}" width="50" height="50" fill="#d9ccb0"/>`;
+  if(st==="water"||st==="boat") for(let i=0;i<3;i++){const px=x+10+R()*55,py=y+18+i*28+R()*8; s+=`<path d="M${px} ${py} q8 -7 16 0 t16 0" stroke="#d9f1fb" stroke-width="3" fill="none" stroke-linecap="round"/>`;}
+  if(st==="glass") s+=`<path d="M${x} ${y+50} H${x+CS} M${x+50} ${y} V${y+CS}" stroke="#a9cdbd" stroke-width="2.5"/><path d="M${x+12} ${y+30} l14 -14 M${x+62} ${y+80} l14 -14" stroke="#fff" stroke-width="3" opacity=".7"/>`;
+  if(st==="stone"){ s+=`<path d="M${x} ${y+33} H${x+CS} M${x} ${y+66} H${x+CS} M${x+40} ${y} V${y+33} M${x+70} ${y+33} V${y+66} M${x+25} ${y+66} V${y+CS}" stroke="#b5ae9f" stroke-width="2.5"/>`; }
+  return s;
+}
+const SH=(cx,cy,rx,ry)=>`<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="#000" opacity=".18"/>`;
+const ICON={
+  tree:(x,y)=>SH(x+54,y+62,34,22)+`<circle cx="${x+50}" cy="${y+46}" r="32" fill="#3f8a3e" stroke="#25562a" stroke-width="3"/><circle cx="${x+38}" cy="${y+38}" r="17" fill="#5aa951"/><circle cx="${x+60}" cy="${y+34}" r="14" fill="#62b45a"/><circle cx="${x+56}" cy="${y+56}" r="13" fill="#4f9c49"/>`,
+  flowers:(x,y)=>SH(x+52,y+60,32,20)+`<circle cx="${x+50}" cy="${y+50}" r="30" fill="#4f9c49" stroke="#2c5e2c" stroke-width="3"/>`+[[38,38],[60,36],[50,52],[34,60],[64,60],[48,70]].map(([a,b])=>`<circle cx="${x+a}" cy="${y+b}" r="7" fill="#f4a3c4" stroke="#c45c88" stroke-width="2"/><circle cx="${x+a}" cy="${y+b}" r="2.4" fill="#ffe08a"/>`).join(""),
+  shelf:(x,y)=>SH(x+50,y+46,42,22)+`<rect x="${x+10}" y="${y+14}" width="80" height="62" rx="4" fill="#7a5233" stroke="#3d2a1a" stroke-width="3"/>`+[0,1].map(row=>[...Array(7)].map((_,i)=>`<rect x="${x+15+i*10.5}" y="${y+19+row*28}" width="8" height="24" fill="${["#c0392b","#2e86ab","#e9c46a","#4f772d","#8e5ba6","#e76f51","#f1faee"][(i+row*3)%7]}" stroke="#3d2a1a" stroke-width="1.2"/>`).join("")).join(""),
+  table:(x,y)=>SH(x+54,y+58,38,28)+`<rect x="${x+14}" y="${y+18}" width="72" height="62" rx="6" fill="#9c6b43" stroke="#4a3220" stroke-width="3"/><path d="M${x+18} ${y+38} H${x+82} M${x+18} ${y+58} H${x+82}" stroke="#7d5433" stroke-width="2"/>`,
+  chair:(x,y)=>SH(x+52,y+58,32,28)+`<rect x="${x+20}" y="${y+14}" width="60" height="22" rx="10" fill="#f4f1e8" stroke="#5f5a50" stroke-width="3"/><rect x="${x+16}" y="${y+30}" width="16" height="48" rx="7" fill="#f4f1e8" stroke="#5f5a50" stroke-width="3"/><rect x="${x+68}" y="${y+30}" width="16" height="48" rx="7" fill="#f4f1e8" stroke="#5f5a50" stroke-width="3"/><rect x="${x+30}" y="${y+34}" width="40" height="42" rx="7" fill="#fffdf7" stroke="#5f5a50" stroke-width="3"/>`,
+  bench:(x,y)=>SH(x+52,y+60,42,20)+`<rect x="${x+8}" y="${y+30}" width="84" height="40" rx="5" fill="#b07a45" stroke="#4a3220" stroke-width="3"/><path d="M${x+10} ${y+43} H${x+90} M${x+10} ${y+57} H${x+90}" stroke="#4a3220" stroke-width="2.5"/>`,
+  plant:(x,y)=>SH(x+52,y+62,26,18)+`<circle cx="${x+50}" cy="${y+56}" r="20" fill="#c8693e" stroke="#7a3a1f" stroke-width="3"/>`+[0,72,144,216,288].map(a=>`<ellipse cx="${x+50}" cy="${y+34}" rx="9" ry="22" fill="#4f9c49" stroke="#2c5e2c" stroke-width="2.5" transform="rotate(${a} ${x+50} ${y+52})"/>`).join("")+`<circle cx="${x+50}" cy="${y+52}" r="7" fill="#3b7f3a"/>`,
+  piano:(x,y)=>SH(x+54,y+56,42,32)+`<path d="M${x+10} ${y+16} H${x+90} V${y+62} Q${x+90} ${y+86} ${x+62} ${y+86} H${x+10} Z" fill="#26221f" stroke="#000" stroke-width="3"/><rect x="${x+12}" y="${y+18}" width="76" height="14" fill="#f7f4ec"/>`+[...Array(9)].map((_,i)=>`<line x1="${x+12+i*8.5}" y1="${y+18}" x2="${x+12+i*8.5}" y2="${y+32}" stroke="#26221f" stroke-width="1.5"/>`).join(""),
+  fireplace:(x,y)=>SH(x+50,y+60,40,22)+`<rect x="${x+10}" y="${y+16}" width="80" height="66" rx="4" fill="#a4553d" stroke="#4b231a" stroke-width="3"/><path d="M${x+10} ${y+38} H${x+90} M${x+10} ${y+60} H${x+90} M${x+40} ${y+16} V${y+38} M${x+64} ${y+38} V${y+60} M${x+34} ${y+60} V${y+82}" stroke="#7d3b2a" stroke-width="2"/><path d="M${x+50} ${y+30} C${x+64} ${y+44} ${x+64} ${y+62} ${x+50} ${y+68} C${x+36} ${y+62} ${x+38} ${y+46} ${x+50} ${y+30} Z" fill="#f6a623" stroke="#c0571b" stroke-width="2.5"/>`,
+  stove:(x,y)=>SH(x+52,y+58,40,30)+`<rect x="${x+12}" y="${y+14}" width="76" height="70" rx="6" fill="#5b5f66" stroke="#24262a" stroke-width="3"/>`+[[32,34],[66,34],[32,64],[66,64]].map(([a,b])=>`<circle cx="${x+a}" cy="${y+b}" r="11" fill="#2f3237" stroke="#888d95" stroke-width="2.5"/>`).join(""),
+  barrel:(x,y)=>SH(x+54,y+58,30,24)+`<circle cx="${x+50}" cy="${y+50}" r="28" fill="#a06a3b" stroke="#4a3220" stroke-width="3"/><circle cx="${x+50}" cy="${y+50}" r="20" fill="none" stroke="#5b5f66" stroke-width="3"/><circle cx="${x+50}" cy="${y+50}" r="9" fill="#8a5a30"/>`,
+  statue:(x,y)=>SH(x+54,y+60,36,26)+`<rect x="${x+18}" y="${y+18}" width="64" height="64" rx="4" fill="#b8b4ab" stroke="#5f5a50" stroke-width="3"/><circle cx="${x+50}" cy="${y+50}" r="18" fill="#dedad2" stroke="#5f5a50" stroke-width="3"/>`,
+  crate:(x,y)=>SH(x+54,y+58,36,28)+`<rect x="${x+16}" y="${y+16}" width="68" height="68" rx="3" fill="#b58550" stroke="#4a3220" stroke-width="3"/><rect x="${x+24}" y="${y+24}" width="52" height="52" fill="none" stroke="#7d5433" stroke-width="3"/><path d="M${x+24} ${y+24} L${x+76} ${y+76}" stroke="#7d5433" stroke-width="5"/>`,
+  parasol:(x,y)=>SH(x+56,y+62,38,26)+[0,1,2,3,4,5,6,7].map(i=>{const a1=i*Math.PI/4,a2=(i+1)*Math.PI/4; return `<path d="M${x+50} ${y+50} L${x+50+40*Math.cos(a1)} ${y+50+40*Math.sin(a1)} A40 40 0 0 1 ${x+50+40*Math.cos(a2)} ${y+50+40*Math.sin(a2)} Z" fill="${i%2?"#f4efe4":"#d9534f"}" stroke="#7a2b28" stroke-width="2"/>`;}).join("")+`<circle cx="${x+50}" cy="${y+50}" r="5" fill="#7a2b28"/>`
+};
+const OBJ_HU={chair:"szék",bench:"pad",table:"asztal",shelf:"könyvespolc",plant:"cserepes növény",piano:"zongora",fireplace:"kandalló",stove:"tűzhely",barrel:"hordó",tree:"fa",flowers:"virágágy",statue:"szobor",crate:"láda",parasol:"napernyő"};
+const OCCUPIABLE=new Set(["chair","bench"]);
+function buildMap(M,OBJ){
+  const N=M.n, area=(r,c)=>M.rows[r-1][c-1], W=N*CS; let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${W}">`;
+  for(let r=1;r<=N;r++)for(let c=1;c<=N;c++) s+=floorCell(M.areas[area(r,c)][2],r,c,7);
+  for(const a in M.areas){ if(M.areas[a][2]!=="boat") continue;
+    const bc=[]; for(let r=1;r<=N;r++)for(let c=1;c<=N;c++) if(area(r,c)===a) bc.push([r,c]);
+    const r0=Math.min(...bc.map(p=>p[0])),r1=Math.max(...bc.map(p=>p[0])),c0=Math.min(...bc.map(p=>p[1])),c1=Math.max(...bc.map(p=>p[1]));
+    const x0=(c0-1)*CS+6,x1=c1*CS-6,y0=(r0-1)*CS-14,y1=r1*CS+4,mx=(x0+x1)/2;
+    s+=`<path d="M${mx} ${y0} C${x1+10} ${y0+40} ${x1} ${y1-30} ${x1-10} ${y1} H${x0+10} C${x0} ${y1-30} ${x0-10} ${y0+40} ${mx} ${y0} Z" fill="#a8774a" stroke="#3d2a1a" stroke-width="6"/><path d="M${mx} ${y0+14} C${x1-2} ${y0+46} ${x1-10} ${y1-30} ${x1-18} ${y1-8} H${x0+18} C${x0+10} ${y1-30} ${x0+2} ${y0+46} ${mx} ${y0+14} Z" fill="#e7cfa3"/>`+[0.35,0.62,0.88].map(f=>`<line x1="${x0+12}" y1="${y0+(y1-y0)*f}" x2="${x1-12}" y2="${y0+(y1-y0)*f}" stroke="#a8774a" stroke-width="7"/>`).join("");
+  }
+  for(let i=1;i<N;i++) s+=`<line x1="${i*CS}" y1="0" x2="${i*CS}" y2="${W}" stroke="#000" stroke-opacity=".16" stroke-width="1.5"/><line x1="0" y1="${i*CS}" x2="${W}" y2="${i*CS}" stroke="#000" stroke-opacity=".16" stroke-width="1.5"/>`;
+  for(const k in OBJ){const [r,c]=k.split(",").map(Number); s+=ICON[OBJ[k]]((c-1)*CS,(r-1)*CS);}
+  const isBoat=a=>M.areas[a][2]==="boat"; let p="";
+  for(let r=1;r<=N;r++)for(let c=1;c<=N;c++){const a=area(r,c);
+    if(c<N&&area(r,c+1)!==a&&!isBoat(a)&&!isBoat(area(r,c+1))) p+=`M${c*CS} ${(r-1)*CS} V${r*CS} `;
+    if(r<N&&area(r+1,c)!==a&&!isBoat(a)&&!isBoat(area(r+1,c))) p+=`M${(c-1)*CS} ${r*CS} H${c*CS} `;}
+  s+=`<path d="${p}" stroke="#2a2620" stroke-width="7" stroke-linecap="square" fill="none"/>`;
+  // labels: free cell nearest the area's centre, label on its lower edge
+  for(const a in M.areas){
+    const cs=[]; for(let r=1;r<=N;r++)for(let c=1;c<=N;c++) if(area(r,c)===a) cs.push([r,c]);
+    const cr=cs.reduce((t,p)=>t+p[0],0)/cs.length, cc=cs.reduce((t,p)=>t+p[1],0)/cs.length;
+    const free=cs.filter(([r,c])=>!OBJ[r+","+c]); const pool=free.length?free:cs;
+    pool.sort((A,B)=>((A[0]-cr)**2+(A[1]-cc)**2)-((B[0]-cr)**2+(B[1]-cc)**2));
+    const [r,c]=pool[0]; const t=M.areas[a][0].toUpperCase(), w=t.length*14.5+26, X=(c-.5)*CS, Y=r*CS-22;
+    s+=`<rect x="${X-w/2}" y="${Y-16}" width="${w}" height="32" rx="16" fill="#fffdf6" stroke="#2a2620" stroke-width="4"/><text x="${X}" y="${Y+8}" text-anchor="middle" font-family="Georgia,serif" font-weight="700" font-size="21" fill="#2a2620" letter-spacing="1">${esc(t)}</text>`;
+  }
+  return "data:image/svg+xml;base64,"+btoa(unescape(encodeURIComponent(s+"</svg>")));
+}
+function hashStr(s){let h=2166136261; for(const ch of s){h^=ch.codePointAt(0); h=Math.imul(h,16777619);} return h>>>0;}
+function portrait(name){
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">`;
+  if(name===VICTIM){s+=`<rect width="120" height="120" fill="#d9d9d9"/><path d="M14 120 C16 96 34 88 60 88 C86 88 104 96 106 120Z" fill="#4a4a4a"/><ellipse cx="60" cy="58" rx="22" ry="27" fill="#9b9b9b"/><path d="M60 31 A22 27 0 1 1 59.9 31" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="5 4"/></svg>`;
+    return "data:image/svg+xml;base64,"+btoa(s);}
+  const R=rnd(hashStr(name)+11), pick=a=>a[Math.floor(R()*a.length)];
+  const bg=pick(["#f3d9c4","#d7e4ef","#e6dcf0","#f5e1d5","#e3ecd9","#f6dde6","#dfe7f2","#efe6cf","#e9e1d6"]);
+  const skin=pick(["#f2c9a8","#e9b48f","#d9a07c","#c98f6a","#9a6447","#7a4c35","#ecc0a0"]);
+  const hair=pick(["#1d1716","#4a2e1f","#6b3b22","#b5482e","#e2b04a","#9a9a9a","#2b2523","#d8d2c6"]);
+  const shirt=pick(["#3f7d8c","#7a3e3e","#5c4d8c","#c45c3a","#4a5d3a","#3d6b4a","#2f4a7a","#b8862b","#5b4636"]);
+  const fem=/a$|e$|i$|ó$|Eszter|Judit|Ivett|Csilla|Kata|Klára|Boglárka|Cecília|Gizella|Ilona|Fanni|Bea|Emese|Anna|Adél|Dóra|Flóra|Hanna/.test(name)&&!/Attila|Csaba|Huba|Bence|Ernő|Gergő|Jenő|Dénes|Imre|Ákos|Endre/.test(name);
+  const style=fem?pick(["long","bun","curly","long"]):pick(["short","short","bald","curly"]);
+  s+=`<rect width="120" height="120" fill="${bg}"/>`;
+  if(style==="long") s+=`<path d="M30 52 C26 92 34 112 40 118 H80 C86 112 94 92 90 52 C88 26 32 26 30 52Z" fill="${hair}"/>`;
+  if(style==="curly") s+=[[36,40],[50,30],[70,30],[84,40],[30,58],[90,58]].map(([a,b])=>`<circle cx="${a}" cy="${b}" r="15" fill="${hair}"/>`).join("");
+  s+=`<path d="M14 120 C16 96 34 88 60 88 C86 88 104 96 106 120Z" fill="${shirt}"/><path d="M50 84 H70 V96 C66 100 54 100 50 96Z" fill="${skin}"/><ellipse cx="60" cy="58" rx="22" ry="27" fill="${skin}"/><path d="M60 31 A22 27 0 0 1 60 85Z" fill="#000" opacity=".09"/>`;
+  if(style==="short") s+=`<path d="M37 56 C34 30 86 30 83 56 C80 44 72 38 60 38 C48 38 40 44 37 56Z" fill="${hair}"/>`;
+  if(style==="long") s+=`<path d="M37 58 C36 30 84 30 83 58 C76 42 66 38 58 38 C50 40 42 46 37 58Z" fill="${hair}"/>`;
+  if(style==="bun") s+=`<circle cx="60" cy="26" r="11" fill="${hair}"/><path d="M37 56 C34 30 86 30 83 56 C78 42 70 37 60 37 C50 37 42 42 37 56Z" fill="${hair}"/>`;
+  if(style==="curly") s+=`<path d="M38 52 C40 32 80 32 82 52 C74 42 46 42 38 52Z" fill="${hair}"/>`;
+  if(style==="bald") s+=`<path d="M38 58 C36 50 38 46 40 44 V62Z M82 58 C84 50 82 46 80 44 V62Z" fill="${hair}"/>`;
+  if(!fem&&R()<.4) s+=`<path d="M39 62 C40 92 80 92 81 62 C76 74 70 78 60 78 C50 78 44 74 39 62Z" fill="${hair}"/>`;
+  else if(!fem&&R()<.4) s+=`<path d="M48 70 C54 64 66 64 72 70 C66 68 54 68 48 70Z" fill="${hair}" stroke="${hair}" stroke-width="3"/>`;
+  if(R()<.3) s+=`<g fill="none" stroke="#2a2620" stroke-width="2.6"><circle cx="50" cy="57" r="7"/><circle cx="70" cy="57" r="7"/><path d="M57 57 H63 M43 56 H38 M77 56 H82"/></g>`;
+  if(R()<.25){const hc=pick(["#3a3530","#7a2f3a","#2f4a7a","#5b4636"]); s+=`<ellipse cx="60" cy="38" rx="34" ry="8" fill="${hc}"/><path d="M42 38 C42 18 78 18 78 38Z" fill="${hc}"/>`;}
+  return "data:image/svg+xml;base64,"+btoa(unescape(encodeURIComponent(s+"</svg>")));
+}
+
+/* ---------------- results & comparison ---------------- */
+function myResults(p){
+  const r={}; for(const pz of DATA.puzzles){const g=loadProg(p,pz.id); if(g) r[pz.id]={t:Math.round(g.elapsed||0),c:g.failChecks||0,s:g.solved?1:0};} return r;
+}
+const score=x=>x.t+PENALTY*x.c;
+function allPlayersResults(){
+  const out={}; for(const p of players) out[p]={r:myResults(p),local:true};
+  for(const n in rivals) if(!out[n]) out[n]={r:rivals[n].r,local:false,u:rivals[n].u};
+  return out;
+}
+function renderHome(){
+  // players
+  const pl=$("#players");
+  pl.innerHTML=players.map(p=>`<button class="btn" type="button" data-p="${esc(p)}" aria-pressed="${p===me}">${esc(p)}</button>`).join("")+
+    `<span class="confirm"><input type="text" id="newName" placeholder="Új játékos neve" maxlength="20" style="width:150px"><button class="btn" id="addP" type="button">+ Hozzáadás</button></span>`;
+  pl.querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>{me=b.dataset.p; LS.set("md.me",me); renderHome();});
+  $("#addP").onclick=addPlayer; $("#newName").onkeydown=e=>{if(e.key==="Enter")addPlayer();};
+  // puzzle list
+  const LV=DATA.levels||[...new Set(DATA.puzzles.map(p=>p.difficulty))];
+  $("#plist").innerHTML=LV.map(lv=>{ const ps=DATA.puzzles.filter(p=>p.difficulty===lv); if(!ps.length) return "";
+    const done=me?ps.filter(p=>{const g=loadProg(me,p.id); return g&&g.solved;}).length:0;
+    return `<h3 class="lvl">${esc(lv)} <span class="note">${done}/${ps.length} megoldva</span></h3>`+ps.map(pz=>{
+    const M=DATA.maps[pz.map], g=me?loadProg(me,pz.id):null;
+    const st=!g?`<span class="st">Még nem kezdted el</span>`:g.solved?`<span class="st ok">✓ Megoldva · ${fmt(g.elapsed)} · ${g.failChecks||0} sikertelen ellenőrzés</span>`:`<span class="st">Folyamatban · ${fmt(g.elapsed||0)} · ${Object.keys(g.pos||{}).length}/${M.n} lerakva</span>`;
+    return `<button class="pcard" type="button" data-id="${pz.id}"><span class="t">${esc(pz.title)}</span><span class="meta"><span class="pill src">${esc(pz.source||"Saját")}</span> ${M.n}×${M.n} · ${M.n-1} gyanúsított</span>${st}</button>`;
+  }).join(""); }).join("");
+  $("#plist").querySelectorAll(".pcard").forEach(b=>b.onclick=()=>{ if(!me){toast("Előbb válassz vagy adj hozzá játékost fent."); $("#newName").focus(); return;} openGame(b.dataset.id); });
+  // comparison
+  const A=allPlayersResults(), names=Object.keys(A);
+  if(!names.length){$("#cmp").innerHTML=`<tr><td class="note">Adj hozzá játékost, és oldjatok meg egy feladványt.</td></tr>`; return;}
+  const wins={}; names.forEach(n=>wins[n]=0);
+  let rows="";
+  for(const pz of DATA.puzzles){
+    const solved=names.filter(n=>A[n].r[pz.id]&&A[n].r[pz.id].s);
+    let best=null; if(solved.length) best=Math.min(...solved.map(n=>score(A[n].r[pz.id])));
+    const winners=solved.filter(n=>score(A[n].r[pz.id])===best);
+    if(solved.length>=2&&winners.length===1) wins[winners[0]]++;
+    rows+=`<tr><td>${esc(pz.title)}</td>`+names.map(n=>{const x=A[n].r[pz.id];
+      if(!x) return `<td>–</td>`;
+      if(!x.s) return `<td class="note">folyamatban<br>${fmt(x.t)}</td>`;
+      return `<td class="${solved.length>=2&&winners.includes(n)?"win":""}">${fmt(score(x))}<br><span class="note">${fmt(x.t)} + ${x.c}×${PENALTY}s</span></td>`;}).join("")+`</tr>`;
+  }
+  $("#cmp").innerHTML=`<thead><tr><th>Feladvány</th>${names.map(n=>`<th>${esc(n)}${A[n].local?"":` <span class="note" title="Link alapján frissítve">(link)</span>`}</th>`).join("")}</tr></thead><tbody>${rows}</tbody><tfoot><tr><td>Győzelmek</td>${names.map(n=>`<td>${wins[n]}</td>`).join("")}</tr></tfoot>`;
+}
+function addPlayer(){
+  const v=$("#newName").value.trim(); if(!v) return;
+  if(!players.includes(v)) players.push(v); LS.set("md.players",players); me=v; LS.set("md.me",me);
+  if(rivals[v]){delete rivals[v]; LS.set("md.rivals",rivals);}
+  renderHome();
+}
+const b64e=s=>btoa(unescape(encodeURIComponent(s))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+const b64d=s=>decodeURIComponent(escape(atob(s.replace(/-/g,"+").replace(/_/g,"/"))));
+function shareLink(){
+  if(!me){toast("Előbb válassz játékost."); return;}
+  const url=location.origin+location.pathname+"#r="+b64e(JSON.stringify({n:me,u:Date.now(),r:myResults(me)}));
+  const txt=`Murdoku eredményeim (${me}): ${url}`;
+  if(navigator.share){navigator.share({title:"Murdoku eredmények",text:txt}).catch(()=>{}); return;}
+  (navigator.clipboard?navigator.clipboard.writeText(url):Promise.reject()).then(()=>toast("Link vágólapra másolva — küldd el a másiknak.")).catch(()=>{ $("#importBox").hidden=false; $("#importText").value=url; $("#importText").select(); toast("Másold ki a linket a mezőből."); });
+}
+function importFrom(str){
+  const m=String(str).match(/#r=([A-Za-z0-9_-]+)/); if(!m){toast("Ebben nem találok eredmény-linket."); return false;}
+  try{
+    const o=JSON.parse(b64d(m[1])); if(!o.n||!o.r) throw 0;
+    if(players.includes(o.n)){toast(`${o.n} ezen az eszközön játszik — az ő eredményei már itt vannak.`); return true;}
+    if(rivals[o.n]&&rivals[o.n].u>o.u){toast("Ez egy régebbi link, a táblázatban frissebb adat van."); return true;}
+    rivals[o.n]={u:o.u,r:o.r}; LS.set("md.rivals",rivals); toast(`${o.n} eredményei frissítve.`); return true;
+  }catch(e){toast("A link sérült vagy hiányos."); return false;}
+}
+$("#shareBtn").onclick=shareLink;
+$("#importToggle").onclick=()=>{$("#importBox").hidden=!$("#importBox").hidden;};
+$("#importBtn").onclick=()=>{ if(importFrom($("#importText").value)){$("#importText").value=""; $("#importBox").hidden=true; renderHome();} };
+
+/* ---------------- game ---------------- */
+let G=null; // current game context
+const PALETTE=['#d7263d','#2e9e44','#3b5bdb','#f08c00','#9c36b5','#1098ad','#e64980','#74b816','#7a1f1f','#0b7285','#8d5a2b','#555555'];
+let press=null, dragging=false, dragVal=null, lastHover=null, undoStack=[], lastPlaced=null, timerId=null;
+function openGame(id){
+  const pz=DATA.puzzles.find(p=>p.id===id), M=DATA.maps[pz.map], N=M.n;
+  const OBJ={}; M.obj.split(";").forEach(s=>{const [k,t]=s.trim().split(" "); OBJ[k]=t;});
+  const people=pz.people.map(p=>p.name).concat([VICTIM]);
+  const COLOR={}; people.forEach((n,i)=>COLOR[n]=n===VICTIM?"#555":PALETTE[i]);
+  const IMG={}; people.forEach(n=>IMG[n]=portrait(n));
+  const saved=loadProg(me,id);
+  G={pz,M,N,OBJ,people,COLOR,IMG,area:(r,c)=>M.rows[r-1][c-1],
+     st:Object.assign({pos:{},marks:{},cand:{},elapsed:0,checks:0,failChecks:0,undos:0,solved:false,sel:people[0],tool:"sketch",shade:true,block:true,hl:true,zoom:1},saved||{})};
+  G.st.tool="sketch"; undoStack=[];
+  $("#home").hidden=true; $("#game").hidden=false; window.scrollTo(0,0);
+  $("#gTitle").textContent=pz.title; $("#gPlayer").textContent="Játékos: "+me;
+  const mapEl=$("#map"); mapEl.style.backgroundImage=`url("${buildMap(M,OBJ)}")`;
+  $("#mapframe").style.setProperty("--n",N);
+  $("#collabels").innerHTML=[...Array(N)].map((_,i)=>`<div class="lab" id="cl${i+1}">${i+1}</div>`).join("");
+  $("#rowlabels").innerHTML=[...Array(N)].map((_,i)=>`<div class="lab" id="rl${i+1}">R${i+1}</div>`).join("");
+  const grid=$("#grid"); grid.innerHTML=""; G.cells={};
+  for(let r=1;r<=N;r++)for(let c=1;c<=N;c++){const d=document.createElement("div"); d.className="cell"; d.dataset.r=r; d.dataset.c=c; grid.appendChild(d); G.cells[r+","+c]=d;}
+  const cards=$("#cards"); cards.innerHTML="";
+  people.forEach(n=>{
+    const b=document.createElement("button"); b.type="button"; b.className="card"; b.id="card-"+n; b.style.setProperty("--pc",COLOR[n]);
+    const clue=n===VICTIM?"Az <b>utolsó szabad mezőn</b> feküdt, egyedül a <b>gyilkossal</b> a területén.":pz.people.find(p=>p.name===n).clue;
+    b.innerHTML=`<div class="pic" style="background-image:url('${IMG[n]}')"><span class="badge">${n===VICTIM?"†":esc(n[0])}</span></div><div style="min-width:0"><div class="nm"><span>${esc(n)}</span><em></em></div><div class="clue">${clue}</div></div>`;
+    b.onclick=()=>{G.st.sel=n; if(G.st.tool!=="sketch"&&G.st.tool!=="place") setTool("sketch"); render();};
+    cards.appendChild(b);
+  });
+  G.letter=n=>n===VICTIM?"†":n[0];
+  G.byL={}; people.forEach(n=>G.byL[G.letter(n)]=n);
+  showReset(); setTool("sketch"); render(); startTimer();
+}
+const isBlocked=k=>!!G.OBJ[k]&&!OCCUPIABLE.has(G.OBJ[k]);
+function save(){ if(G) LS.set(progKey(me,G.pz.id),G.st); }
+function snap(){undoStack.push(JSON.stringify({pos:G.st.pos,marks:G.st.marks,cand:G.st.cand})); if(undoStack.length>300)undoStack.shift();}
+function whoAt(r,c){for(const n in G.st.pos){const p=G.st.pos[n]; if(p[0]===r&&p[1]===c)return n;}return null;}
+function highlightFor(n){
+  const obj=new Set(), ar=new Set(); const pp=G.pz.people.find(p=>p.name===n); const keys=pp?pp.keys:[];
+  for(let r=1;r<=G.N;r++)for(let c=1;c<=G.N;c++){const k=r+","+c,a=G.area(r,c);
+    for(const key of keys){ if(key[0]==="@"){ if(key.slice(1)===a) ar.add(k);} else if(G.OBJ[k]===key) obj.add(k);} }
+  return {obj,ar};
+}
+function conflicts(){
+  const rows={},cols={}; for(const n in G.st.pos){const [r,c]=G.st.pos[n]; (rows[r]=rows[r]||[]).push(n); (cols[c]=cols[c]||[]).push(n);}
+  const bad=new Set(),badR=new Set(),badC=new Set();
+  for(const r in rows) if(rows[r].length>1){badR.add(+r); rows[r].forEach(n=>bad.add(n));}
+  for(const c in cols) if(cols[c].length>1){badC.add(+c); cols[c].forEach(n=>bad.add(n));}
+  return {bad,badR,badC};
+}
+function setTool(t){G.st.tool=t; document.querySelectorAll("[data-tool]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.tool===t)); renderStatus();}
+function render(){
+  const st=G.st, {bad,badR,badC}=conflicts(), HL=st.hl?highlightFor(st.sel):{obj:new Set(),ar:new Set()};
+  const usedR=new Set(),usedC=new Set(); for(const n in st.pos){usedR.add(st.pos[n][0]); usedC.add(st.pos[n][1]);}
+  for(const k in G.cells){
+    const d=G.cells[k], [r,c]=k.split(",").map(Number), who=whoAt(r,c), m=st.marks[k]; let html="";
+    if(who) html=`<div class="token${bad.has(who)?" bad":""}${lastPlaced===who?" flash":""}" style="background-image:url('${G.IMG[who]}');border-color:${G.COLOR[who]}"></div>`;
+    else if(m==="x"||(st.block&&isBlocked(k))) html=`<div class="x${m==="x"?"":" auto"}"></div>`;
+    if(!who&&st.cand[k]) html+=`<div class="cands">${[...st.cand[k]].sort().map(L=>{const n=G.byL[L]; return `<i class="${n===st.sel?"me":""}${st.pos[n]?" done":""}" style="--pc:${G.COLOR[n]}">${esc(L)}</i>`;}).join("")}</div>`;
+    if(d._h!==html){d.innerHTML=html; d._h=html;}
+    d.classList.toggle("shaded",!!st.shade&&!who&&(usedR.has(r)||usedC.has(c)));
+    d.classList.toggle("blocked",!!st.block&&isBlocked(k));
+    d.classList.toggle("hlobj",HL.obj.has(k)); d.classList.toggle("hlarea",HL.ar.has(k));
+  }
+  lastPlaced=null;
+  for(let i=1;i<=G.N;i++){$("#rl"+i).classList.toggle("bad",badR.has(i)); $("#cl"+i).classList.toggle("bad",badC.has(i));}
+  G.people.forEach(n=>{const b=document.getElementById("card-"+n), p=st.pos[n];
+    b.classList.toggle("sel",st.sel===n); b.classList.toggle("bad",bad.has(n));
+    const nc=Object.values(st.cand).filter(s=>s.includes(G.letter(n))).length;
+    b.querySelector("em").innerHTML=p?`R${p[0]} C${p[1]}`:(nc?`<small>${nc} jelölt</small>`:"");});
+  const v=st.pos[VICTIM]; let killer=null;
+  if(v){const a=G.area(v[0],v[1]); const inA=G.people.filter(n=>n!==VICTIM&&st.pos[n]&&G.area(st.pos[n][0],st.pos[n][1])===a); killer=inA.length===1?inA[0]:inA.length>1?"?":null;}
+  $("#ansVic").classList.toggle("set",!!v); $("#ansKill").classList.toggle("set",!!killer);
+  $("#ansVic b").textContent=v?`R${v[0]} C${v[1]}`:"—"; $("#ansKill b").textContent=killer||"—";
+  $("#sChecks").textContent=st.checks; $("#sTime").textContent=fmt(st.elapsed);
+  $("#shadeBtn").setAttribute("aria-pressed",st.shade); $("#blockBtn").setAttribute("aria-pressed",st.block); $("#hlBtn").setAttribute("aria-pressed",st.hl);
+  $("#mapframe").style.setProperty("--zoom",st.zoom);
+  document.querySelectorAll("[data-zoom]").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.zoom===st.zoom));
+  $("#map").style.setProperty("--cell",($("#map").clientWidth/G.N)+"px");
+  renderStatus(); save();
+}
+function renderStatus(){
+  const st=G.st, s=$("#status");
+  if(st.solved){s.innerHTML=`<b>Megoldva</b> — ${fmt(st.elapsed)}, ${st.failChecks} sikertelen ellenőrzés.`; return;}
+  if(st.tool==="place") s.innerHTML=`Lerakás: <b>${esc(st.sel)}</b> — kattints egy mezőre.`;
+  else if(st.tool==="sketch") s.innerHTML=`Vázlat: <b>${esc(st.sel)} (${esc(G.letter(st.sel))})</b> — koppintás: lehetséges hely · hosszú nyomás: biztos.`;
+  else s.innerHTML={x:"Kizárás — kattints vagy húzz a mezőkön.",erase:"Radír — jelölés, betű vagy bábu törlése."}[st.tool];
+}
+function placeSure(r,c,n){G.st.pos[n]=[r,c]; delete G.st.marks[r+","+c]; lastPlaced=n;}
+function advanceSel(){const i=G.people.indexOf(G.st.sel); for(let k=1;k<=G.people.length;k++){const n=G.people[(i+k)%G.people.length]; if(!G.st.pos[n]){G.st.sel=n; break;}}}
+function toggleCand(k,n){const L=G.letter(n); let s=G.st.cand[k]||""; s=s.includes(L)?s.replace(L,""):s+L; if(s) G.st.cand[k]=s; else delete G.st.cand[k];}
+function applyMark(k,first){
+  const st=G.st;
+  if(st.tool==="erase"){const w=whoAt(...k.split(",").map(Number)); if(w) delete st.pos[w]; delete st.marks[k]; delete st.cand[k]; return;}
+  if(whoAt(...k.split(",").map(Number))) return;
+  if(first) dragVal=st.marks[k]==="x"?null:"x";
+  if(dragVal){st.marks[k]="x"; delete st.cand[k];} else delete st.marks[k];
+}
+const locked=()=>G&&G.st.solved;
+$("#grid").addEventListener("pointerdown",e=>{
+  if(!G) return; const d=e.target.closest(".cell"); if(!d) return; e.preventDefault();
+  if(locked()){toast("Ez a feladvány már megoldva."); return;}
+  const r=+d.dataset.r,c=+d.dataset.c,k=r+","+c, st=G.st;
+  if(st.tool==="sketch"){
+    const who=whoAt(r,c); press={k,r,c,who,d,fired:false}; d.classList.add("pressing");
+    press.timer=setTimeout(()=>{ if(!press) return; press.fired=true; d.classList.remove("pressing"); snap();
+      if(who){delete st.pos[who]; st.sel=who; toast(`${who} levéve`);}
+      else if(isBlocked(k)){undoStack.pop(); toast("Ide nem állhat senki"); render(); return;}
+      else {placeSure(r,c,st.sel); advanceSel();}
+      try{navigator.vibrate&&navigator.vibrate(15);}catch(_){}
+      render();},450);
+    return;
+  }
+  if(st.tool==="place"){
+    const who=whoAt(r,c);
+    if(who&&who!==st.sel){st.sel=who; render(); return;}
+    snap();
+    if(who===st.sel) delete st.pos[who];
+    else if(isBlocked(k)){undoStack.pop(); toast("Ide nem állhat senki"); return;}
+    else {placeSure(r,c,st.sel); advanceSel();}
+    render(); return;
+  }
+  snap(); dragging=true; applyMark(k,true); render();
+});
+function cancelPress(){if(!press) return; clearTimeout(press.timer); press.d.classList.remove("pressing"); press=null;}
+window.addEventListener("pointerup",()=>{
+  dragging=false; if(!press) return; const p=press; cancelPress(); if(p.fired) return;
+  const st=G.st;
+  if(p.who&&p.who!==st.sel){st.sel=p.who; render(); return;}
+  if(p.who){toast("Hosszú nyomással leveheted"); return;}
+  if(isBlocked(p.k)){toast("Ide nem állhat senki"); return;}
+  if(st.marks[p.k]==="x"){toast("Kizárt mező — előbb vedd le az X-et"); return;}
+  snap(); toggleCand(p.k,st.sel); render();
+});
+window.addEventListener("pointercancel",cancelPress);
+$("#grid").addEventListener("contextmenu",e=>e.preventDefault());
+window.addEventListener("pointermove",e=>{
+  if(!G||$("#game").hidden) return;
+  const el=document.elementFromPoint(e.clientX,e.clientY), d=el&&el.closest?el.closest("#grid .cell"):null;
+  hover(d);
+  if(press&&d!==press.d&&!press.fired) cancelPress();
+  if(dragging&&d){applyMark(d.dataset.r+","+d.dataset.c,false); render();}
+});
+function hover(d){
+  const key=d?d.dataset.r+","+d.dataset.c:null; if(key===lastHover) return; lastHover=key;
+  document.querySelectorAll(".cell.cross").forEach(x=>x.classList.remove("cross"));
+  document.querySelectorAll(".lab.hot").forEach(x=>x.classList.remove("hot"));
+  if(!d) return; const r=d.dataset.r,c=d.dataset.c;
+  for(let i=1;i<=G.N;i++){G.cells[r+","+i].classList.add("cross"); G.cells[i+","+c].classList.add("cross");}
+  $("#rl"+r).classList.add("hot"); $("#cl"+c).classList.add("hot");
+}
+document.querySelectorAll("[data-tool]").forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
+document.querySelectorAll("[data-zoom]").forEach(b=>b.onclick=()=>{G.st.zoom=+b.dataset.zoom; render();});
+$("#undoBtn").onclick=()=>{ if(locked()) return; const h=undoStack.pop(); if(!h){toast("Nincs mit visszavonni"); return;} const o=JSON.parse(h); Object.assign(G.st,o); G.st.undos++; render(); };
+$("#shadeBtn").onclick=()=>{G.st.shade=!G.st.shade; render();};
+$("#blockBtn").onclick=()=>{G.st.block=!G.st.block; render();};
+$("#hlBtn").onclick=()=>{G.st.hl=!G.st.hl; render();};
+function showReset(){$("#resetWrap").innerHTML=`<button class="btn danger" id="resetBtn" type="button">Tábla törlése</button>`; $("#resetBtn").onclick=askReset;}
+function askReset(){ if(locked()) return;
+  $("#resetWrap").innerHTML=`<span class="confirm">Törlöd a táblát? (az idő megmarad) <button class="btn danger" id="rYes" type="button">Igen</button><button class="btn" id="rNo" type="button">Mégse</button></span>`;
+  $("#rYes").onclick=()=>{snap(); G.st.pos={}; G.st.marks={}; G.st.cand={}; render(); showReset();};
+  $("#rNo").onclick=showReset;}
+$("#checkBtn").onclick=()=>{
+  if(!G) return; const st=G.st; if(st.solved){toast("Már megoldva."); return;}
+  const placed=G.people.filter(n=>st.pos[n]);
+  if(!placed.length){toast("Még senkit nem raktál le."); return;}
+  st.checks++;
+  const wrong=placed.filter(n=>sha256(`${G.pz.id}|${n}|${st.pos[n][0]},${st.pos[n][1]}`).slice(0,20)!==G.pz.check[n]);
+  if(placed.length===G.N&&!wrong.length){ st.solved=true; st.solvedAt=Date.now(); stopTimer(); render(); celebrate(); return; }
+  st.failChecks++;
+  toast(wrong.length?`${wrong.length} bábu rossz helyen van. (+${PENALTY} mp)`:`Eddig minden jó (${placed.length}/${G.N}). (+${PENALTY} mp)`);
+  render();
+};
+function celebrate(){
+  const st=G.st, v=st.pos[VICTIM], a=G.area(v[0],v[1]);
+  const killer=G.people.find(n=>n!==VICTIM&&G.area(st.pos[n][0],st.pos[n][1])===a);
+  $("#modalBody").innerHTML=`<div class="big">Megoldva!</div><div>A gyilkos: <b>${esc(killer)}</b> (${esc(G.M.areas[a][1])})</div>
+    <div>Idő: <b>${fmt(st.elapsed)}</b> · Sikertelen ellenőrzés: <b>${st.failChecks}</b><br>Pontidő: <b>${fmt(st.elapsed+PENALTY*st.failChecks)}</b></div>
+    <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap"><button class="btn primary" id="mShare" type="button">Eredményeim küldése</button><button class="btn" id="mBack" type="button">Feladványok</button><button class="btn" id="mStay" type="button">Bezárás</button></div>`;
+  $("#modal").hidden=false;
+  $("#mShare").onclick=()=>{shareLink();}; $("#mBack").onclick=()=>{$("#modal").hidden=true; goHome();}; $("#mStay").onclick=()=>{$("#modal").hidden=true;};
+}
+/* timer: runs only while the game is open, visible and unsolved */
+function startTimer(){stopTimer(); timerId=setInterval(()=>{ if(!G||G.st.solved||$("#game").hidden||document.visibilityState!=="visible") return; G.st.elapsed+=1; $("#sTime").textContent=fmt(G.st.elapsed); if(G.st.elapsed%5===0) save(); },1000);}
+function stopTimer(){if(timerId) clearInterval(timerId); timerId=null;}
+document.addEventListener("visibilitychange",()=>{ if(G) save(); });
+window.addEventListener("pagehide",()=>{ if(G) save(); });
+function goHome(){ if(G) save(); stopTimer(); G=null; $("#game").hidden=true; $("#home").hidden=false; renderHome(); }
+$("#backBtn").onclick=goHome;
+document.addEventListener("keydown",e=>{
+  if(!G||$("#game").hidden) return;
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){e.preventDefault(); $("#undoBtn").click(); return;}
+  const m={"1":"sketch","2":"place","3":"x","4":"erase"}[e.key]; if(m&&!e.ctrlKey&&!e.metaKey&&document.activeElement.tagName!=="INPUT") setTool(m);
+});
+new ResizeObserver(()=>{ if(G) $("#map").style.setProperty("--cell",($("#map").clientWidth/G.N)+"px"); }).observe($("#map"));
+
+/* ---------------- boot ---------------- */
+function checkHash(){ if(location.hash.startsWith("#r=")){ importFrom(location.hash); try{window.history.replaceState(null,"",location.pathname+location.search);}catch(e){location.hash="";} if(!G) renderHome(); } }
+checkHash(); window.addEventListener("hashchange",checkHash);
+if(me&&!players.includes(me)) me=null;
+renderHome();
+</script>
+</body>
+</html>
