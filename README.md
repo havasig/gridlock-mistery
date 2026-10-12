@@ -1,32 +1,33 @@
-# Murdoku párbaj
+# Gridlock
 
-Logikai gyilkossági rejtvények két (vagy több) játékosnak. Statikus weboldal: nincs szerver, nincs fiók, nincs adatbázis. 20 saját feladvány 4 szinten (Kezdő 6×6, Könnyű 8×8, Közepes 10×10, Nehéz 12×12), mindegyik egyértelmű megoldással.
+Logikai gyilkossági rejtvények két (vagy több) játékosnak, stopperrel és összehasonlítással.
+Statikus weboldal: nincs szerver, nincs fiók, nincs adatbázis.
 
-## Közzététel GitHub Pages-en (kb. 3 perc)
+**Játék:** https://havasig.github.io/gridlock-mistery/
 
-1. GitHubon hozz létre egy új, **public** repót, pl. `gridlock-mistery`.
-2. Töltsd fel a három fájlt: `index.html`, `puzzles.js`, `README.md`
-   (Add file → Upload files → húzd be őket → Commit changes).
-3. Settings → Pages → *Build and deployment* → Source: **Deploy from a branch**,
-   Branch: **main**, mappa: **/(root)** → Save.
-4. Egy-két perc múlva elérhető: `https://havasig.github.io/gridlock-mistery/`
+20 saját feladvány 4 szinten (Kezdő 6×6, Könnyű 8×8, Közepes 10×10, Nehéz 12×12), mindegyik egyértelmű megoldással.
 
-Tipp: telefonon nyisd meg, majd böngészőmenü → „Hozzáadás a kezdőképernyőhöz”, így appként indul.
-
-Helyben kipróbálni: a mappában `python -m http.server 8000`, majd `http://localhost:8000`.
+A játékmenetet Manuel Garand [Murdoku](https://murdoku.com) feladványai ihlették. Minden itt szereplő feladvány saját készítésű; a projekt nem kapcsolódik a Murdokuhoz.
 
 ## Hogyan működik
 
 - **Játékosok:** a kezdőlapon add meg a neved. Egy eszközön több játékos is lehet.
-- **Haladás:** minden lépés, a jelölések és a stopper automatikusan mentődik a böngészőbe, játékosonként és feladványonként. Ha félúton abbahagyod, ott folytatod.
-- **Stopper:** csak akkor megy, ha a feladvány nyitva van és az oldal látszik (háttérben vagy bezárva megáll).
-- **Ellenőrzés:** megmondja, hány bábu áll rossz helyen. Minden sikertelen ellenőrzés +30 mp büntetés.
+- **Haladás:** minden lépés, jelölés és a stopper automatikusan mentődik a böngészőbe, játékosonként és feladványonként.
+- **Stopper:** csak akkor megy, ha a feladvány nyitva van és az oldal látszik.
+- **Ellenőrzés:** megmondja, hány bábu áll rossz helyen. Minden sikertelen ellenőrzés +30 mp.
 - **Pontidő** = idő + 30 mp × sikertelen ellenőrzések. Feladványonként a kisebb pontidő nyer.
-- **Összehasonlítás külön telefonon:** „Eredményeim küldése” → elküldöd a linket a másiknak → ha megnyitja, a te eredményeid bekerülnek az ő táblázatába. Ezt bármikor újra lehet küldeni, a frissebb felülírja a régit.
-- **Egy eszközön játszva** nem kell semmit küldeni, a táblázat mindenkit mutat.
+- **Eredmények összevetése külön telefonon:** „Eredményeim küldése” → a másik megnyitja a linket → bekerülsz az ő táblázatába.
+- **Folytatás másik eszközön:** „Haladás átvitele linkkel” → küldd el magadnak → nyisd meg a másik eszközön. Ahol mindkét helyen van haladás, a frissebb marad. Fájlba mentés és visszatöltés is van.
 
 ## Fontos tudnivalók
 
-- Az adatok a böngészőben vannak (localStorage). Ha törlöd a böngészési adatokat, vagy másik böngészőt/eszközt használsz, a haladás nem jön át.
-- A megoldások a `puzzles.js`-ben csak SHA-256 lenyomatként szerepelnek, így ránézésre nem olvashatók ki. Egy elszánt fejlesztő kis munkával visszafejthetné, de egymás közti játékra ez bőven elég.
-- Új feladványokat a `puzzles.js` bővítésével lehet hozzáadni (a meglévők mintájára; mindegyik egyértelmű megoldással).
+- Az adatok a böngészőben vannak (localStorage). Böngészési adatok törlése, privát ablak vagy másik böngésző esetén nem látszanak – ilyenkor az átviteli link vagy a mentésfájl segít.
+- iPhone-on érdemes a kezdőképernyőre tenni (Megosztás → Főképernyőhöz adás), különben a Safari 7 nap használaton kívül törölheti az adatokat.
+- A megoldások a `puzzles.js`-ben csak SHA-256 lenyomatként szerepelnek.
+
+## Helyi futtatás
+
+```
+python -m http.server 8000
+```
+majd http://localhost:8000

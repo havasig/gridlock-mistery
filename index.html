@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Murdoku párbaj</title>
+<title>Gridlock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=Alegreya+Sans:wght@400;500;700&display=swap">
 <style>
@@ -141,7 +141,7 @@ aside{display:flex;flex-direction:column;gap:8px;min-width:0}
 <!-- ================= HOME ================= -->
 <section id="home">
   <div class="homehead">
-    <div><h1>Murdoku párbaj</h1><div class="sub">Logikai gyilkossági rejtvények kettőtöknek</div></div>
+    <div><h1>Gridlock</h1><div class="sub">Logikai gyilkossági rejtvények kettőtöknek</div></div>
     <div class="players" id="players"></div>
   </div>
   <div class="homegrid">
@@ -164,8 +164,22 @@ aside{display:flex;flex-direction:column;gap:8px;min-width:0}
         </div>
         <p class="note">Ha külön telefonon játszotok: küldd el a linket a másiknak (pl. Messengeren). Ha megnyitja, a te eredményeid bekerülnek az ő táblázatába. Ha egy eszközön játszotok, nem kell semmit küldeni.</p>
       </div>
+      <div class="share" style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+        <h2 style="font-size:18px;margin:0">Folytatás másik eszközön</h2>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn primary" id="xferBtn" type="button">Haladás átvitele linkkel</button>
+          <button class="btn" id="saveFileBtn" type="button">Mentés fájlba</button>
+          <label class="btn" for="loadFile">Betöltés fájlból</label>
+          <input type="file" id="loadFile" accept=".json,application/json" hidden>
+        </div>
+        <div id="xferBox" hidden><textarea id="xferText" readonly></textarea></div>
+        <p class="note">A link az ezen az eszközön lévő összes haladást viszi: elkezdett és megoldott feladványokat, jelöléseket, időt, minden játékosét. Küldd el magadnak (pl. e-mailben vagy Messengeren), és nyisd meg a másik eszközön. Ahol mindkét helyen van haladás, a frissebb marad meg.</p>
+      </div>
     </div>
   </div>
+  <footer class="note" style="margin-top:18px;text-align:center">
+    A játékmenetet Manuel Garand <a href="https://murdoku.com" target="_blank" rel="noopener" style="color:inherit">Murdoku</a> feladványai ihlették. Minden itt szereplő feladvány saját készítésű; ez az oldal nem kapcsolódik a Murdokuhoz.
+  </footer>
 </section>
 
 <!-- ================= GAME ================= -->
@@ -424,8 +438,8 @@ const b64d=s=>decodeURIComponent(escape(atob(s.replace(/-/g,"+").replace(/_/g,"/
 function shareLink(){
   if(!me){toast("Előbb válassz játékost."); return;}
   const url=location.origin+location.pathname+"#r="+b64e(JSON.stringify({n:me,u:Date.now(),r:myResults(me)}));
-  const txt=`Murdoku eredményeim (${me}): ${url}`;
-  if(navigator.share){navigator.share({title:"Murdoku eredmények",text:txt}).catch(()=>{}); return;}
+  const txt=`Gridlock eredményeim (${me}): ${url}`;
+  if(navigator.share){navigator.share({title:"Gridlock eredmények",text:txt}).catch(()=>{}); return;}
   (navigator.clipboard?navigator.clipboard.writeText(url):Promise.reject()).then(()=>toast("Link vágólapra másolva — küldd el a másiknak.")).catch(()=>{ $("#importBox").hidden=false; $("#importText").value=url; $("#importText").select(); toast("Másold ki a linket a mezőből."); });
 }
 function importFrom(str){
@@ -476,7 +490,7 @@ function openGame(id){
   showReset(); setTool("sketch"); render(); startTimer();
 }
 const isBlocked=k=>!!G.OBJ[k]&&!OCCUPIABLE.has(G.OBJ[k]);
-function save(){ if(G) LS.set(progKey(me,G.pz.id),G.st); }
+function save(){ if(G){ G.st.updated=Date.now(); LS.set(progKey(me,G.pz.id),G.st); } }
 function snap(){undoStack.push(JSON.stringify({pos:G.st.pos,marks:G.st.marks,cand:G.st.cand})); if(undoStack.length>300)undoStack.shift();}
 function whoAt(r,c){for(const n in G.st.pos){const p=G.st.pos[n]; if(p[0]===r&&p[1]===c)return n;}return null;}
 function highlightFor(n){
@@ -639,7 +653,70 @@ document.addEventListener("keydown",e=>{
 new ResizeObserver(()=>{ if(G) $("#map").style.setProperty("--cell",($("#map").clientWidth/G.N)+"px"); }).observe($("#map"));
 
 /* ---------------- boot ---------------- */
-function checkHash(){ if(location.hash.startsWith("#r=")){ importFrom(location.hash); try{window.history.replaceState(null,"",location.pathname+location.search);}catch(e){location.hash="";} if(!G) renderHome(); } }
+/* ---------------- device transfer ---------------- */
+function collectAll(){
+  const prog={};
+  try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k&&k.startsWith("md.p.")) prog[k.slice(5)]=JSON.parse(localStorage.getItem(k)); } }catch(e){}
+  return {v:1,at:Date.now(),players,rivals,prog};
+}
+const newer=(a,b)=>{ // is a better than b?
+  if(!b) return true; if(!a) return false;
+  if(a.solved&&!b.solved) return true; if(b.solved&&!a.solved) return false;
+  const ua=a.updated||0, ub=b.updated||0; if(ua!==ub) return ua>ub;
+  return (a.elapsed||0)>(b.elapsed||0);
+};
+function mergeAll(o){
+  if(!o||o.v!==1||!o.prog) throw new Error("bad");
+  let n=0;
+  for(const p of (o.players||[])) if(!players.includes(p)){ players.push(p); }
+  for(const p of players) if(rivals[p]) delete rivals[p];
+  for(const name in (o.rivals||{})){ if(players.includes(name)) continue; const r=o.rivals[name]; if(!rivals[name]||rivals[name].u<r.u) rivals[name]=r; }
+  for(const k in o.prog){ const cur=LS.get("md.p."+k,null); if(newer(o.prog[k],cur)){ LS.set("md.p."+k,o.prog[k]); n++; } }
+  LS.set("md.players",players); LS.set("md.rivals",rivals);
+  if(!me&&players.length){ me=players[0]; LS.set("md.me",me); }
+  return n;
+}
+async function packAll(){
+  const json=JSON.stringify(collectAll());
+  try{ if(window.CompressionStream){
+    const s=new Blob([json]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+    const buf=new Uint8Array(await new Response(s).arrayBuffer()); let bin=""; buf.forEach(x=>bin+=String.fromCharCode(x));
+    return "z"+btoa(bin).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""); } }catch(e){}
+  return "j"+b64e(json);
+}
+async function unpack(s){
+  if(s[0]==="j") return JSON.parse(b64d(s.slice(1)));
+  const bin=atob(s.slice(1).replace(/-/g,"+").replace(/_/g,"/")); const u=Uint8Array.from(bin,c=>c.charCodeAt(0));
+  const st=new Blob([u]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  return JSON.parse(await new Response(st).text());
+}
+$("#xferBtn").onclick=async()=>{
+  if(G) save();
+  const url=location.origin+location.pathname+"#s="+await packAll();
+  if(navigator.share){ try{ await navigator.share({title:"Gridlock haladás",text:"Gridlock haladás átvitele",url}); return; }catch(e){ if(e&&e.name==="AbortError") return; } }
+  try{ await navigator.clipboard.writeText(url); toast("Link vágólapra másolva. Nyisd meg a másik eszközön."); }
+  catch(e){ $("#xferBox").hidden=false; $("#xferText").value=url; $("#xferText").select(); toast("Másold ki a linket a mezőből."); }
+};
+$("#saveFileBtn").onclick=()=>{
+  if(G) save();
+  const blob=new Blob([JSON.stringify(collectAll())],{type:"application/json"}), a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download=`gridlock-mentes-${new Date().toISOString().slice(0,10)}.json`; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+};
+$("#loadFile").onchange=async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  try{ const n=mergeAll(JSON.parse(await f.text())); toast(`Betöltve: ${n} feladvány haladása frissült.`); renderHome(); }
+  catch(err){ toast("Ez nem Gridlock mentésfájl."); }
+  e.target.value="";
+};
+try{ navigator.storage&&navigator.storage.persist&&navigator.storage.persist(); }catch(e){}
+
+function checkHash(){
+  if(location.hash.startsWith("#s=")){ const s=location.hash.slice(3);
+    try{window.history.replaceState(null,"",location.pathname+location.search);}catch(e){location.hash="";}
+    unpack(s).then(o=>{ const n=mergeAll(o); toast(`Átvitel kész: ${n} feladvány haladása frissült.`); if(!G) renderHome(); })
+             .catch(()=>toast("Az átviteli link sérült vagy hiányos."));
+    return; } if(location.hash.startsWith("#r=")){ importFrom(location.hash); try{window.history.replaceState(null,"",location.pathname+location.search);}catch(e){location.hash="";} if(!G) renderHome(); } }
 checkHash(); window.addEventListener("hashchange",checkHash);
 if(me&&!players.includes(me)) me=null;
 renderHome();
