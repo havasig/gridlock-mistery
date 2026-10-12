@@ -4,6 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Gridlock</title>
+<meta name="description" content="Logikai gyilkossági rejtvények kettőtöknek — ki volt a tettes?">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Gridlock">
+<meta property="og:title" content="Gridlock — ki volt a tettes?">
+<meta property="og:description" content="Logikai gyilkossági rejtvények kettőtöknek. Nézd meg az eredményeimet, és próbáld megverni!">
+<meta property="og:url" content="https://havasig.github.io/gridlock-mistery/">
+<meta property="og:image" content="https://havasig.github.io/gridlock-mistery/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="hu_HU">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="theme-color" content="#2a2620">
@@ -83,6 +94,7 @@ main.board{width:calc(var(--mapw) + 30px);max-width:100%;min-width:0}
 .rowlabels{grid-row:2;display:grid;grid-template-rows:repeat(var(--n),1fr);font-size:11px;color:var(--muted);align-items:center;text-align:right;padding-right:4px}
 .lab.hot{color:var(--ink);font-weight:700}
 .lab.bad{color:var(--danger);font-weight:700}
+.mapframe.nozoom .map{touch-action:none}
 .map{grid-column:2;grid-row:2;position:relative;aspect-ratio:1/1;background:center/100% 100% no-repeat;border:2px solid #2a2620;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
 .grid{position:absolute;inset:0;display:grid;grid-template-columns:repeat(var(--n),1fr);grid-template-rows:repeat(var(--n),1fr)}
 .cell{position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center}
@@ -343,7 +355,7 @@ function buildMap(M,OBJ){
     const x0=(c0-1)*CS+6,x1=c1*CS-6,y0=(r0-1)*CS-14,y1=r1*CS+4,mx=(x0+x1)/2;
     s+=`<path d="M${mx} ${y0} C${x1+10} ${y0+40} ${x1} ${y1-30} ${x1-10} ${y1} H${x0+10} C${x0} ${y1-30} ${x0-10} ${y0+40} ${mx} ${y0} Z" fill="#a8774a" stroke="#3d2a1a" stroke-width="6"/><path d="M${mx} ${y0+14} C${x1-2} ${y0+46} ${x1-10} ${y1-30} ${x1-18} ${y1-8} H${x0+18} C${x0+10} ${y1-30} ${x0+2} ${y0+46} ${mx} ${y0+14} Z" fill="#e7cfa3"/>`+[0.35,0.62,0.88].map(f=>`<line x1="${x0+12}" y1="${y0+(y1-y0)*f}" x2="${x1-12}" y2="${y0+(y1-y0)*f}" stroke="#a8774a" stroke-width="7"/>`).join("");
   }
-  for(let i=1;i<N;i++) s+=`<line x1="${i*CS}" y1="0" x2="${i*CS}" y2="${W}" stroke="#000" stroke-opacity=".16" stroke-width="1.5"/><line x1="0" y1="${i*CS}" x2="${W}" y2="${i*CS}" stroke="#000" stroke-opacity=".16" stroke-width="1.5"/>`;
+  for(let i=1;i<N;i++) s+=`<line x1="${i*CS}" y1="0" x2="${i*CS}" y2="${W}" stroke="#000" stroke-opacity=".32" stroke-width="3"/><line x1="0" y1="${i*CS}" x2="${W}" y2="${i*CS}" stroke="#000" stroke-opacity=".32" stroke-width="3"/>`;
   for(const k in OBJ){const [r,c]=k.split(",").map(Number); s+=ICON[OBJ[k]]((c-1)*CS,(r-1)*CS);}
   const isBoat=a=>M.areas[a][2]==="boat"; let p="";
   for(let r=1;r<=N;r++)for(let c=1;c<=N;c++){const a=area(r,c);
@@ -441,17 +453,34 @@ function addPlayer(){
 }
 const b64e=s=>btoa(unescape(encodeURIComponent(s))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
 const b64d=s=>decodeURIComponent(escape(atob(s.replace(/-/g,"+").replace(/_/g,"/"))));
+/* compact result codes: map key -> short unique letters (assigned in key order, stable when maps are appended) */
+const ABBR={}, UNABBR={};
+(()=>{ for(const k of Object.keys(DATA.maps)){ let n=1; while(UNABBR[k.slice(0,n)]) n++; ABBR[k]=k.slice(0,n); UNABBR[k.slice(0,n)]=k; } })();
+function encodeResults(name,res){
+  const parts=[];
+  for(const id in res){ const m=id.match(/^(.+)-(\d+)$/); if(!m||!ABBR[m[1]]) continue; const x=res[id];
+    parts.push(ABBR[m[1]]+m[2]+"."+x.t.toString(36)+"."+x.c.toString(36)+(x.s?"":".0")); }
+  return "2"+b64e(name+"\n"+Date.now().toString(36)+"\n"+parts.join(","));
+}
+function decodeResults(code){
+  if(code[0]==="2"){
+    const [n,u,body]=b64d(code.slice(1)).split("\n"); const r={};
+    for(const p of (body?body.split(","):[])){ const [head,t,c,s]=p.split("."); const m=head.match(/^([a-z]+)(\d+)$/); if(!m||!UNABBR[m[1]]) continue;
+      r[UNABBR[m[1]]+"-"+m[2]]={t:parseInt(t,36),c:parseInt(c,36),s:s==="0"?0:1}; }
+    return {n,u:parseInt(u,36),r};
+  }
+  return JSON.parse(b64d(code)); // old format
+}
 function shareLink(){
   if(!me){toast("Előbb válassz játékost."); return;}
-  const url=location.origin+location.pathname+"#r="+b64e(JSON.stringify({n:me,u:Date.now(),r:myResults(me)}));
-  const txt=`Gridlock eredményeim (${me}): ${url}`;
-  if(navigator.share){navigator.share({title:"Gridlock eredmények",text:txt}).catch(()=>{}); return;}
-  (navigator.clipboard?navigator.clipboard.writeText(url):Promise.reject()).then(()=>toast("Link vágólapra másolva — küldd el a másiknak.")).catch(()=>{ $("#importBox").hidden=false; $("#importText").value=url; $("#importText").select(); toast("Másold ki a linket a mezőből."); });
+  const url=location.origin+location.pathname+"#r="+encodeResults(me,myResults(me));
+  const fallback=()=>{ $("#importBox").hidden=false; $("#importText").value=url; $("#importText").focus(); $("#importText").select(); toast("Másold ki a linket a mezőből."); };
+  try{ navigator.clipboard.writeText(url).then(()=>toast("Link vágólapra másolva — illeszd be a másiknak Messengerbe."),fallback); }catch(e){ fallback(); }
 }
 function importFrom(str){
   const m=String(str).match(/#r=([A-Za-z0-9_-]+)/); if(!m){toast("Ebben nem találok eredmény-linket."); return false;}
   try{
-    const o=JSON.parse(b64d(m[1])); if(!o.n||!o.r) throw 0;
+    const o=decodeResults(m[1]); if(!o.n||!o.r) throw 0;
     if(players.includes(o.n)){toast(`${o.n} ezen az eszközön játszik — az ő eredményei már itt vannak.`); return true;}
     if(rivals[o.n]&&rivals[o.n].u>o.u){toast("Ez egy régebbi link, a táblázatban frissebb adat van."); return true;}
     rivals[o.n]={u:o.u,r:o.r}; LS.set("md.rivals",rivals); toast(`${o.n} eredményei frissítve.`); return true;
@@ -539,7 +568,7 @@ function render(){
   $("#ansVic b").textContent=v?`R${v[0]} C${v[1]}`:"—"; $("#ansKill b").textContent=killer||"—";
   $("#sChecks").textContent=st.checks; $("#sTime").textContent=fmt(st.elapsed);
   $("#shadeBtn").setAttribute("aria-pressed",st.shade); $("#blockBtn").setAttribute("aria-pressed",st.block); $("#hlBtn").setAttribute("aria-pressed",st.hl);
-  $("#mapframe").style.setProperty("--zoom",st.zoom);
+  $("#mapframe").style.setProperty("--zoom",st.zoom); $("#mapframe").classList.toggle("nozoom",st.zoom===1);
   document.querySelectorAll("[data-zoom]").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.zoom===st.zoom));
   $("#map").style.setProperty("--cell",($("#map").clientWidth/G.N)+"px");
   renderStatus(); save();
@@ -594,9 +623,19 @@ $("#grid").addEventListener("pointerdown",e=>{
   }
   snap(); dragging=true; applyMark(k,true); render();
 });
+let paint=null;
+function canLetter(k){ const st=G.st, [r,c]=k.split(",").map(Number);
+  if(whoAt(r,c)||isBlocked(k)||st.marks[k]==="x") return false;
+  if(st.shade&&Object.values(st.pos).some(q=>q[0]===r||q[1]===c)) return false;
+  return true; }
+function paintCell(k){ if(!paint||!canLetter(k)) return; const L=G.letter(G.st.sel), cur=G.st.cand[k]||"";
+  if(paint.add&&!cur.includes(L)) G.st.cand[k]=cur+L;
+  else if(!paint.add&&cur.includes(L)){ const v=cur.replace(L,""); if(v) G.st.cand[k]=v; else delete G.st.cand[k]; }
+  else return;
+  render(); }
 function cancelPress(){if(!press) return; clearTimeout(press.timer); press.d.classList.remove("pressing"); press=null;}
 window.addEventListener("pointerup",()=>{
-  dragging=false; if(!press) return; const p=press; cancelPress(); if(p.fired) return;
+  dragging=false; paint=null; if(!press) return; const p=press; cancelPress(); if(p.fired) return;
   const st=G.st;
   if(p.who&&p.who!==st.sel){st.sel=p.who; render(); return;}
   if(p.who){toast("Hosszú nyomással leveheted"); return;}
@@ -606,13 +645,17 @@ window.addEventListener("pointerup",()=>{
   if(!st.sel){toast("Előbb válassz szereplőt a listából"); return;}
   snap(); toggleCand(p.k,st.sel); render();
 });
-window.addEventListener("pointercancel",cancelPress);
+window.addEventListener("pointercancel",()=>{cancelPress(); paint=null; dragging=false;});
 $("#grid").addEventListener("contextmenu",e=>e.preventDefault());
 window.addEventListener("pointermove",e=>{
   if(!G||$("#game").hidden) return;
   const el=document.elementFromPoint(e.clientX,e.clientY), d=el&&el.closest?el.closest("#grid .cell"):null;
   hover(d);
-  if(press&&d!==press.d&&!press.fired) cancelPress();
+  if(press&&d&&d!==press.d&&!press.fired){
+    const p=press; cancelPress();
+    if(G.st.sel&&!p.who){ const L=G.letter(G.st.sel); paint={add:!(G.st.cand[p.k]||"").includes(L)}; snap(); paintCell(p.k); }
+  } else if(press&&!d&&!press.fired) cancelPress();
+  if(paint&&d){ paintCell(d.dataset.r+","+d.dataset.c); }
   if(dragging&&d){applyMark(d.dataset.r+","+d.dataset.c,false); render();}
 });
 function hover(d){
