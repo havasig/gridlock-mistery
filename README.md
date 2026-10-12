@@ -4,7 +4,7 @@ Logikai gyilkossági rejtvények két (vagy több) játékosnak. Statikus webold
 
 ## Közzététel GitHub Pages-en (kb. 3 perc)
 
-1. GitHubon hozz létre egy új, **public** repót, pl. `murdoku`.
+1. GitHubon hozz létre egy új, **public** repót, pl. `gridlock-mistery`.
 2. Töltsd fel a három fájlt: `index.html`, `puzzles.js`, `README.md`
    (Add file → Upload files → húzd be őket → Commit changes).
 3. Settings → Pages → *Build and deployment* → Source: **Deploy from a branch**,
