@@ -128,6 +128,11 @@ aside{display:flex;flex-direction:column;gap:8px;min-width:0}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:5px}
 .card{--pc:#888;display:grid;grid-template-columns:38px 1fr;gap:7px;align-items:start;text-align:left;font:inherit;color:inherit;background:transparent;border:1.5px solid var(--line);border-radius:8px;padding:5px 6px;cursor:pointer;min-width:0}
 .card:hover{border-color:var(--rope)}
+.card.placed{opacity:.5;background:color-mix(in srgb,var(--line) 35%,transparent)}
+.card.placed .pic{filter:grayscale(1)}
+.card.placed .nm span::after{content:" ✓";color:var(--ok);font-family:var(--body);font-weight:700}
+.card.placed.sel,.card.placed.bad{opacity:.85}
+.btn.off{opacity:.45;cursor:not-allowed}
 .card.sel{border-color:var(--pc);box-shadow:0 0 0 2px var(--pc);background:color-mix(in srgb,var(--pc) 14%,transparent)}
 .card .pic{position:relative;width:38px;height:38px;border-radius:50%;background:#fffbea center/cover;border:2.5px solid var(--pc)}
 .card.bad .pic{box-shadow:0 0 0 2.5px var(--danger)}
@@ -559,14 +564,16 @@ function render(){
   lastPlaced=null;
   for(let i=1;i<=G.N;i++){$("#rl"+i).classList.toggle("bad",badR.has(i)); $("#cl"+i).classList.toggle("bad",badC.has(i));}
   G.people.forEach(n=>{const b=document.getElementById("card-"+n), p=st.pos[n];
-    b.classList.toggle("sel",st.sel===n); b.classList.toggle("bad",bad.has(n));
+    b.classList.toggle("sel",st.sel===n); b.classList.toggle("bad",bad.has(n)); b.classList.toggle("placed",!!p);
     const nc=Object.values(st.cand).filter(s=>s.includes(G.letter(n))).length;
     b.querySelector("em").innerHTML=p?`R${p[0]} C${p[1]}`:(nc?`<small>${nc} jelölt</small>`:"");});
   const v=st.pos[VICTIM]; let killer=null;
   if(v){const a=G.area(v[0],v[1]); const inA=G.people.filter(n=>n!==VICTIM&&st.pos[n]&&G.area(st.pos[n][0],st.pos[n][1])===a); killer=inA.length===1?inA[0]:inA.length>1?"?":null;}
   $("#ansVic").classList.toggle("set",!!v); $("#ansKill").classList.toggle("set",!!killer);
   $("#ansVic b").textContent=v?`R${v[0]} C${v[1]}`:"—"; $("#ansKill b").textContent=killer||"—";
-  $("#sChecks").textContent=st.checks; $("#sTime").textContent=fmt(st.elapsed);
+  $("#sChecks").textContent=st.checks;
+  { const all=G.people.every(n=>st.pos[n]); const cb=$("#checkBtn"); cb.classList.toggle("off",!all||st.solved);
+    cb.title=all?"":`Még ${G.people.filter(n=>!st.pos[n]).length} szereplőt kell elhelyezni`; } $("#sTime").textContent=fmt(st.elapsed);
   $("#shadeBtn").setAttribute("aria-pressed",st.shade); $("#blockBtn").setAttribute("aria-pressed",st.block); $("#hlBtn").setAttribute("aria-pressed",st.hl);
   $("#mapframe").style.setProperty("--zoom",st.zoom); $("#mapframe").classList.toggle("nozoom",st.zoom===1);
   document.querySelectorAll("[data-zoom]").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.zoom===st.zoom));
@@ -680,7 +687,7 @@ function askReset(){ if(locked()) return;
 $("#checkBtn").onclick=()=>{
   if(!G) return; const st=G.st; if(st.solved){toast("Már megoldva."); return;}
   const placed=G.people.filter(n=>st.pos[n]);
-  if(!placed.length){toast("Még senkit nem raktál le."); return;}
+  if(placed.length<G.N){toast(`Előbb mindenkit helyezz el — még ${G.N-placed.length} hiányzik.`); return;}
   st.checks++;
   const wrong=placed.filter(n=>sha256(`${G.pz.id}|${n}|${st.pos[n][0]},${st.pos[n][1]}`).slice(0,20)!==G.pz.check[n]);
   if(placed.length===G.N&&!wrong.length){ st.solved=true; st.solvedAt=Date.now(); stopTimer(); render(); celebrate(); return; }
