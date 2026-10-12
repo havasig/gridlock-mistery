@@ -187,7 +187,7 @@ aside{display:flex;flex-direction:column;gap:8px;min-width:0}
           <textarea id="importText" placeholder="Illeszd be ide a kapott linket"></textarea>
           <button class="btn" id="importBtn" type="button">Beolvasás</button>
         </div>
-        <p class="note">Ha külön telefonon játszotok: küldd el a linket a másiknak (pl. Messengeren). Ha megnyitja, a te eredményeid bekerülnek az ő táblázatába. Ha egy eszközön játszotok, nem kell semmit küldeni.</p>
+        <p class="note">Az „Eredményeim küldése” vágólapra másol egy rövid összefoglalót a linkkel — illeszd be Messengerbe. Ha a másik megnyitja a linket (vagy beilleszti ide az egész üzenetet), a te eredményeid bekerülnek az ő táblázatába. Ha egy eszközön játszotok, nem kell semmit küldeni.</p>
       </div>
       <div class="share" style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
         <h2 style="font-size:18px;margin:0">Folytatás másik eszközön</h2>
@@ -470,7 +470,19 @@ function encodeResults(name,res){
     parts.push(ABBR[m[1]]+m[2]+"."+x.t.toString(36)+"."+x.c.toString(36)+(x.s?"":".0")); }
   return "2"+b64e(name+"\n"+Date.now().toString(36)+"\n"+parts.join(","));
 }
+function encodeResults3(name,res){
+  const parts=[];
+  for(const id in res){ const m=id.match(/^(.+)-(\d+)$/); if(!m||!ABBR[m[1]]) continue; const x=res[id];
+    parts.push(ABBR[m[1]]+m[2]+"."+x.t.toString(36)+"."+x.c.toString(36)+(x.s?"":".0")); }
+  return "3"+encodeURIComponent(name).replace(/~/g,"%7E")+"~"+Date.now().toString(36)+"~"+parts.join("_");
+}
 function decodeResults(code){
+  if(code[0]==="3"){
+    const [n,u,body]=code.slice(1).split("~"); const r={};
+    for(const p of (body?body.split("_"):[])){ const [head,t,c,s]=p.split("."); const m=head.match(/^([a-z]+)(\d+)$/); if(!m||!UNABBR[m[1]]) continue;
+      r[UNABBR[m[1]]+"-"+m[2]]={t:parseInt(t,36),c:parseInt(c,36),s:s==="0"?0:1}; }
+    return {n:decodeURIComponent(n),u:parseInt(u,36),r};
+  }
   if(code[0]==="2"){
     const [n,u,body]=b64d(code.slice(1)).split("\n"); const r={};
     for(const p of (body?body.split(","):[])){ const [head,t,c,s]=p.split("."); const m=head.match(/^([a-z]+)(\d+)$/); if(!m||!UNABBR[m[1]]) continue;
@@ -479,14 +491,28 @@ function decodeResults(code){
   }
   return JSON.parse(b64d(code)); // old format
 }
-function shareLink(){
+function shareText(pid){
+  const res=myResults(me), url=location.origin+location.pathname+"#r="+encodeResults3(me,res);
+  const sq=x=>!x?"⬜":!x.s?"⬛":x.c?"🟨":"🟩";
+  const LV=DATA.levels||[...new Set(DATA.puzzles.map(p=>p.difficulty))];
+  const w=Math.max(...LV.map(l=>l.length));
+  const lines=[`🔎 Gridlock — ${me}`];
+  if(pid&&res[pid]&&res[pid].s){ const pz=DATA.puzzles.find(p=>p.id===pid), x=res[pid];
+    lines.push(`${pz.title} megoldva ⏱ ${fmt(x.t)}${x.c?` · ${x.c} hibás ellenőrzés`:" · hibátlanul"}`); }
+  lines.push("");
+  for(const lv of LV){ const ps=DATA.puzzles.filter(p=>p.difficulty===lv); lines.push(lv.padEnd(w," ")+"  "+ps.map(p=>sq(res[p.id])).join("")); }
+  const solved=Object.values(res).filter(x=>x.s), tot=solved.reduce((a,x)=>a+score(x),0);
+  lines.push("", `${solved.length}/${DATA.puzzles.length} megoldva · össz. pontidő ${fmt(tot)}`, url);
+  return {text:lines.join("\n"),url};
+}
+function shareLink(pid){
   if(!me){toast("Előbb válassz játékost."); return;}
-  const url=location.origin+location.pathname+"#r="+encodeResults(me,myResults(me));
-  const fallback=()=>{ $("#importBox").hidden=false; $("#importText").value=url; $("#importText").focus(); $("#importText").select(); toast("Másold ki a linket a mezőből."); };
-  try{ navigator.clipboard.writeText(url).then(()=>toast("Link vágólapra másolva — illeszd be a másiknak Messengerbe."),fallback); }catch(e){ fallback(); }
+  const {text}=shareText(typeof pid==="string"?pid:null);
+  const fallback=()=>{ $("#importBox").hidden=false; $("#importText").value=text; $("#importText").focus(); $("#importText").select(); toast("Másold ki a szöveget a mezőből."); };
+  try{ navigator.clipboard.writeText(text).then(()=>toast("Eredmény vágólapra másolva — illeszd be Messengerbe."),fallback); }catch(e){ fallback(); }
 }
 function importFrom(str){
-  const m=String(str).match(/#r=([A-Za-z0-9_-]+)/); if(!m){toast("Ebben nem találok eredmény-linket."); return false;}
+  const m=String(str).match(/#r=([^\s#]+)/); if(!m){toast("Ebben nem találok eredmény-linket."); return false;}
   try{
     const o=decodeResults(m[1]); if(!o.n||!o.r) throw 0;
     if(players.includes(o.n)){toast(`${o.n} ezen az eszközön játszik — az ő eredményei már itt vannak.`); return true;}
@@ -494,7 +520,7 @@ function importFrom(str){
     rivals[o.n]={u:o.u,r:o.r}; LS.set("md.rivals",rivals); toast(`${o.n} eredményei frissítve.`); return true;
   }catch(e){toast("A link sérült vagy hiányos."); return false;}
 }
-$("#shareBtn").onclick=shareLink;
+$("#shareBtn").onclick=()=>shareLink();
 $("#importToggle").onclick=()=>{$("#importBox").hidden=!$("#importBox").hidden;};
 $("#importBtn").onclick=()=>{ if(importFrom($("#importText").value)){$("#importText").value=""; $("#importBox").hidden=true; renderHome();} };
 
@@ -711,7 +737,7 @@ function celebrate(){
     <div>Idő: <b>${fmt(st.elapsed)}</b> · Sikertelen ellenőrzés: <b>${st.failChecks}</b><br>Pontidő: <b>${fmt(st.elapsed+PENALTY*st.failChecks)}</b></div>
     <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap"><button class="btn primary" id="mShare" type="button">Eredményeim küldése</button><button class="btn" id="mBack" type="button">Feladványok</button><button class="btn" id="mStay" type="button">Bezárás</button></div>`;
   $("#modal").hidden=false;
-  $("#mShare").onclick=()=>{shareLink();}; $("#mBack").onclick=()=>{$("#modal").hidden=true; goHome();}; $("#mStay").onclick=()=>{$("#modal").hidden=true;};
+  $("#mShare").onclick=()=>{shareLink(G&&G.pz.id);}; $("#mBack").onclick=()=>{$("#modal").hidden=true; goHome();}; $("#mStay").onclick=()=>{$("#modal").hidden=true;};
 }
 /* timer: runs only while the game is open, visible and unsolved */
 function startTimer(){stopTimer(); timerId=setInterval(()=>{ if(!G||G.st.solved||$("#game").hidden||document.visibilityState!=="visible") return; G.st.elapsed+=1; $("#sTime").textContent=fmt(G.st.elapsed); if(G.st.elapsed%5===0) save(); },1000);}
