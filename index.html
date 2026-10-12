@@ -226,7 +226,8 @@ aside{display:flex;flex-direction:column;gap:8px;min-width:0}
         <button class="btn" data-tool="place" type="button">● Bábu</button>
         <button class="btn" data-tool="x" type="button">✕ Kizár</button>
         <button class="btn" data-tool="erase" type="button">⌫ Radír</button>
-        <button class="btn" id="undoBtn" type="button">↶ Vissza</button>
+        <button class="btn" id="undoBtn" type="button" title="Visszavonás (Ctrl+Z)">↶ Vissza</button>
+        <button class="btn" id="redoBtn" type="button" title="Újra (Ctrl+Y)">↷ Előre</button>
         <span id="resetWrap"></span>
       </div>
       <div class="status" id="status"></div>
@@ -498,7 +499,7 @@ $("#importBtn").onclick=()=>{ if(importFrom($("#importText").value)){$("#importT
 /* ---------------- game ---------------- */
 let G=null; // current game context
 const PALETTE=['#d7263d','#2e9e44','#3b5bdb','#f08c00','#9c36b5','#1098ad','#e64980','#74b816','#7a1f1f','#0b7285','#8d5a2b','#555555'];
-let press=null, dragging=false, dragVal=null, lastHover=null, undoStack=[], lastPlaced=null, timerId=null;
+let press=null, dragging=false, dragVal=null, lastHover=null, undoStack=[], redoStack=[], savedRedo=null, lastPlaced=null, timerId=null;
 function openGame(id){
   const pz=DATA.puzzles.find(p=>p.id===id), M=DATA.maps[pz.map], N=M.n;
   const OBJ={}; M.obj.split(";").forEach(s=>{const [k,t]=s.trim().split(" "); OBJ[k]=t;});
@@ -508,7 +509,7 @@ function openGame(id){
   const saved=loadProg(me,id);
   G={pz,M,N,OBJ,people,COLOR,IMG,area:(r,c)=>M.rows[r-1][c-1],
      st:Object.assign({pos:{},marks:{},cand:{},elapsed:0,checks:0,failChecks:0,undos:0,solved:false,sel:null,tool:"sketch",shade:true,block:true,hl:true,zoom:1},saved||{})};
-  G.st.tool="sketch"; undoStack=[];
+  G.st.tool="sketch"; undoStack=[]; redoStack=[];
   $("#home").hidden=true; $("#game").hidden=false; window.scrollTo(0,0);
   $("#gTitle").textContent=pz.title; $("#gPlayer").textContent="Játékos: "+me;
   const mapEl=$("#map"); mapEl.style.backgroundImage=`url("${buildMap(M,OBJ)}")`;
@@ -531,7 +532,9 @@ function openGame(id){
 }
 const isBlocked=k=>!!G.OBJ[k]&&!OCCUPIABLE.has(G.OBJ[k]);
 function save(){ if(G){ G.st.updated=Date.now(); LS.set(progKey(me,G.pz.id),G.st); } }
-function snap(){undoStack.push(JSON.stringify({pos:G.st.pos,marks:G.st.marks,cand:G.st.cand})); if(undoStack.length>300)undoStack.shift();}
+const curState=()=>JSON.stringify({pos:G.st.pos,marks:G.st.marks,cand:G.st.cand});
+function snap(){undoStack.push(curState()); if(undoStack.length>300)undoStack.shift(); savedRedo=redoStack; redoStack=[];}
+function cancelSnap(){undoStack.pop(); if(savedRedo){redoStack=savedRedo; savedRedo=null;}}
 function whoAt(r,c){for(const n in G.st.pos){const p=G.st.pos[n]; if(p[0]===r&&p[1]===c)return n;}return null;}
 function highlightFor(n){
   const obj=new Set(), ar=new Set(); const pp=G.pz.people.find(p=>p.name===n); const keys=pp?pp.keys:[];
@@ -572,6 +575,7 @@ function render(){
   $("#ansVic").classList.toggle("set",!!v); $("#ansKill").classList.toggle("set",!!killer);
   $("#ansVic b").textContent=v?`R${v[0]} C${v[1]}`:"—"; $("#ansKill b").textContent=killer||"—";
   $("#sChecks").textContent=st.checks;
+  $("#undoBtn").classList.toggle("off",!undoStack.length); $("#redoBtn").classList.toggle("off",!redoStack.length);
   { const all=G.people.every(n=>st.pos[n]); const cb=$("#checkBtn"); cb.classList.toggle("off",!all||st.solved);
     cb.title=all?"":`Még ${G.people.filter(n=>!st.pos[n]).length} szereplőt kell elhelyezni`; } $("#sTime").textContent=fmt(st.elapsed);
   $("#shadeBtn").setAttribute("aria-pressed",st.shade); $("#blockBtn").setAttribute("aria-pressed",st.block); $("#hlBtn").setAttribute("aria-pressed",st.hl);
@@ -611,8 +615,8 @@ $("#grid").addEventListener("pointerdown",e=>{
     const who=whoAt(r,c); press={k,r,c,who,d,fired:false}; d.classList.add("pressing");
     press.timer=setTimeout(()=>{ if(!press) return; press.fired=true; d.classList.remove("pressing"); snap();
       if(who){delete st.pos[who]; st.sel=who; toast(`${who} levéve`);}
-      else if(isBlocked(k)){undoStack.pop(); toast("Ide nem állhat senki"); render(); return;}
-      else if(!st.sel){undoStack.pop(); toast("Előbb válassz szereplőt a listából"); return;}
+      else if(isBlocked(k)){cancelSnap(); toast("Ide nem állhat senki"); render(); return;}
+      else if(!st.sel){cancelSnap(); toast("Előbb válassz szereplőt a listából"); return;}
       else {placeSure(r,c,st.sel); st.sel=null;}
       try{navigator.vibrate&&navigator.vibrate(15);}catch(_){}
       render();},450);
@@ -623,8 +627,8 @@ $("#grid").addEventListener("pointerdown",e=>{
     if(who&&who!==st.sel){st.sel=who; render(); return;}
     snap();
     if(who&&who===st.sel) delete st.pos[who];
-    else if(isBlocked(k)){undoStack.pop(); toast("Ide nem állhat senki"); return;}
-    else if(!st.sel){undoStack.pop(); toast("Előbb válassz szereplőt a listából"); return;}
+    else if(isBlocked(k)){cancelSnap(); toast("Ide nem állhat senki"); return;}
+    else if(!st.sel){cancelSnap(); toast("Előbb válassz szereplőt a listából"); return;}
     else {placeSure(r,c,st.sel); st.sel=null;}
     render(); return;
   }
@@ -675,7 +679,10 @@ function hover(d){
 }
 document.querySelectorAll("[data-tool]").forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
 document.querySelectorAll("[data-zoom]").forEach(b=>b.onclick=()=>{G.st.zoom=+b.dataset.zoom; render();});
-$("#undoBtn").onclick=()=>{ if(locked()) return; const h=undoStack.pop(); if(!h){toast("Nincs mit visszavonni"); return;} const o=JSON.parse(h); Object.assign(G.st,o); G.st.undos++; render(); };
+$("#undoBtn").onclick=()=>{ if(locked()) return; const h=undoStack.pop(); if(!h){toast("Nincs mit visszavonni"); return;}
+  redoStack.push(curState()); Object.assign(G.st,JSON.parse(h)); G.st.undos++; savedRedo=null; render(); };
+$("#redoBtn").onclick=()=>{ if(locked()) return; const h=redoStack.pop(); if(!h){toast("Nincs mit újra végrehajtani"); return;}
+  undoStack.push(curState()); Object.assign(G.st,JSON.parse(h)); savedRedo=null; render(); };
 $("#shadeBtn").onclick=()=>{G.st.shade=!G.st.shade; render();};
 $("#blockBtn").onclick=()=>{G.st.block=!G.st.block; render();};
 $("#hlBtn").onclick=()=>{G.st.hl=!G.st.hl; render();};
@@ -713,6 +720,7 @@ function goHome(){ if(G) save(); stopTimer(); G=null; $("#game").hidden=true; $(
 $("#backBtn").onclick=goHome;
 document.addEventListener("keydown",e=>{
   if(!G||$("#game").hidden) return;
+  if((e.ctrlKey||e.metaKey)&&(e.key.toLowerCase()==="y"||(e.key.toLowerCase()==="z"&&e.shiftKey))){e.preventDefault(); $("#redoBtn").click(); return;}
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){e.preventDefault(); $("#undoBtn").click(); return;}
   const m={"1":"sketch","2":"place","3":"x","4":"erase"}[e.key]; if(m&&!e.ctrlKey&&!e.metaKey&&document.activeElement.tagName!=="INPUT") setTool(m);
 });
