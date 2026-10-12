@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Gridlock</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#2a2620">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=Alegreya+Sans:wght@400;500;700&display=swap">
 <style>
@@ -470,7 +473,7 @@ function openGame(id){
   const IMG={}; people.forEach(n=>IMG[n]=portrait(n));
   const saved=loadProg(me,id);
   G={pz,M,N,OBJ,people,COLOR,IMG,area:(r,c)=>M.rows[r-1][c-1],
-     st:Object.assign({pos:{},marks:{},cand:{},elapsed:0,checks:0,failChecks:0,undos:0,solved:false,sel:people[0],tool:"sketch",shade:true,block:true,hl:true,zoom:1},saved||{})};
+     st:Object.assign({pos:{},marks:{},cand:{},elapsed:0,checks:0,failChecks:0,undos:0,solved:false,sel:null,tool:"sketch",shade:true,block:true,hl:true,zoom:1},saved||{})};
   G.st.tool="sketch"; undoStack=[];
   $("#home").hidden=true; $("#game").hidden=false; window.scrollTo(0,0);
   $("#gTitle").textContent=pz.title; $("#gPlayer").textContent="Játékos: "+me;
@@ -485,7 +488,7 @@ function openGame(id){
     const b=document.createElement("button"); b.type="button"; b.className="card"; b.id="card-"+n; b.style.setProperty("--pc",COLOR[n]);
     const clue=n===VICTIM?"Az <b>utolsó szabad mezőn</b> feküdt, egyedül a <b>gyilkossal</b> a területén.":pz.people.find(p=>p.name===n).clue;
     b.innerHTML=`<div class="pic" style="background-image:url('${IMG[n]}')"><span class="badge">${n===VICTIM?"†":esc(n[0])}</span></div><div style="min-width:0"><div class="nm"><span>${esc(n)}</span><em></em></div><div class="clue">${clue}</div></div>`;
-    b.onclick=()=>{G.st.sel=n; if(G.st.tool!=="sketch"&&G.st.tool!=="place") setTool("sketch"); render();};
+    b.onclick=()=>{G.st.sel=G.st.sel===n?null:n; if(G.st.tool!=="sketch"&&G.st.tool!=="place") setTool("sketch"); render();};
     cards.appendChild(b);
   });
   G.letter=n=>n===VICTIM?"†":n[0];
@@ -544,7 +547,8 @@ function render(){
 function renderStatus(){
   const st=G.st, s=$("#status");
   if(st.solved){s.innerHTML=`<b>Megoldva</b> — ${fmt(st.elapsed)}, ${st.failChecks} sikertelen ellenőrzés.`; return;}
-  if(st.tool==="place") s.innerHTML=`Lerakás: <b>${esc(st.sel)}</b> — kattints egy mezőre.`;
+  if((st.tool==="place"||st.tool==="sketch")&&!st.sel) s.innerHTML=`<b>Válassz szereplőt</b> a listából, majd koppints a térképre.`;
+  else if(st.tool==="place") s.innerHTML=`Lerakás: <b>${esc(st.sel)}</b> — kattints egy mezőre.`;
   else if(st.tool==="sketch") s.innerHTML=`Vázlat: <b>${esc(st.sel)} (${esc(G.letter(st.sel))})</b> — koppintás: lehetséges hely · hosszú nyomás: biztos.`;
   else s.innerHTML={x:"Kizárás — kattints vagy húzz a mezőkön.",erase:"Radír — jelölés, betű vagy bábu törlése."}[st.tool];
 }
@@ -572,7 +576,8 @@ $("#grid").addEventListener("pointerdown",e=>{
     press.timer=setTimeout(()=>{ if(!press) return; press.fired=true; d.classList.remove("pressing"); snap();
       if(who){delete st.pos[who]; st.sel=who; toast(`${who} levéve`);}
       else if(isBlocked(k)){undoStack.pop(); toast("Ide nem állhat senki"); render(); return;}
-      else {placeSure(r,c,st.sel); advanceSel();}
+      else if(!st.sel){undoStack.pop(); toast("Előbb válassz szereplőt a listából"); return;}
+      else {placeSure(r,c,st.sel); st.sel=null;}
       try{navigator.vibrate&&navigator.vibrate(15);}catch(_){}
       render();},450);
     return;
@@ -581,9 +586,10 @@ $("#grid").addEventListener("pointerdown",e=>{
     const who=whoAt(r,c);
     if(who&&who!==st.sel){st.sel=who; render(); return;}
     snap();
-    if(who===st.sel) delete st.pos[who];
+    if(who&&who===st.sel) delete st.pos[who];
     else if(isBlocked(k)){undoStack.pop(); toast("Ide nem állhat senki"); return;}
-    else {placeSure(r,c,st.sel); advanceSel();}
+    else if(!st.sel){undoStack.pop(); toast("Előbb válassz szereplőt a listából"); return;}
+    else {placeSure(r,c,st.sel); st.sel=null;}
     render(); return;
   }
   snap(); dragging=true; applyMark(k,true); render();
@@ -597,6 +603,7 @@ window.addEventListener("pointerup",()=>{
   if(isBlocked(p.k)){toast("Ide nem állhat senki"); return;}
   if(st.marks[p.k]==="x"){toast("Kizárt mező — előbb vedd le az X-et"); return;}
   if(st.shade&&Object.values(st.pos).some(q=>q[0]===p.r||q[1]===p.c)){toast("Ebben a sorban vagy oszlopban már van valaki"); return;}
+  if(!st.sel){toast("Előbb válassz szereplőt a listából"); return;}
   snap(); toggleCand(p.k,st.sel); render();
 });
 window.addEventListener("pointercancel",cancelPress);

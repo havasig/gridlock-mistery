@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#2a2620"/>
+  <!-- handle -->
+  <path d="M38 38 L54 54" stroke="#8a5a2b" stroke-width="9" stroke-linecap="round"/>
+  <path d="M38 38 L54 54" stroke="#b07a45" stroke-width="5" stroke-linecap="round"/>
+  <!-- lens -->
+  <circle cx="26" cy="26" r="16" fill="#f7f2df" stroke="#e0a526" stroke-width="5"/>
+  <!-- blood drop inside lens -->
+  <path d="M26 15 C26 15 18 25 18 30 A8 8 0 0 0 34 30 C34 25 26 15 26 15 Z" fill="#c0392b"/>
+  <ellipse cx="23" cy="29" rx="2" ry="3" fill="#fff" opacity=".55"/>
+</svg>
