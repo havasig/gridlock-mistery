@@ -9,7 +9,7 @@ Logikai gyilkossági rejtvények két (vagy több) játékosnak. Statikus webold
    (Add file → Upload files → húzd be őket → Commit changes).
 3. Settings → Pages → *Build and deployment* → Source: **Deploy from a branch**,
    Branch: **main**, mappa: **/(root)** → Save.
-4. Egy-két perc múlva elérhető: `https://<felhasználóneved>.github.io/murdoku/`
+4. Egy-két perc múlva elérhető: `https://havasig.github.io/gridlock-mistery/`
 
 Tipp: telefonon nyisd meg, majd böngészőmenü → „Hozzáadás a kezdőképernyőhöz”, így appként indul.
 
