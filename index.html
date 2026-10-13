@@ -135,6 +135,13 @@ aside{display:flex;flex-direction:column;gap:8px;min-width:0}
 .card.placed .nm span::after{content:" ✓";color:var(--ok);font-family:var(--body);font-weight:700}
 .card.placed.sel,.card.placed.bad{opacity:.85}
 .btn.off{opacity:.45;cursor:not-allowed}
+.hintp{border-color:var(--sel);background:color-mix(in srgb,var(--sel) 10%,var(--paper));display:grid;gap:6px;font-size:14px}
+.hintp h3{margin:0;font-family:var(--display);font-weight:400;font-size:18px;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.hintp ol{margin:0;padding-left:20px;display:grid;gap:3px;color:var(--muted)}
+.hintp ol li:last-child{color:var(--ink)}
+.hintp .row{display:flex;gap:6px;flex-wrap:wrap}
+.cell.hintcell{z-index:2;box-shadow:inset 0 0 0 3px #3b82f6,0 0 10px 2px rgba(59,130,246,.8)}
+.cell.hinttarget{z-index:4;box-shadow:inset 0 0 0 4px #22c55e,0 0 16px 5px rgba(34,197,94,.95);animation:pulse 1.2s ease-in-out infinite}
 .card.sel{border-color:var(--pc);box-shadow:0 0 0 2px var(--pc);background:color-mix(in srgb,var(--pc) 14%,transparent)}
 .card .pic{position:relative;width:38px;height:38px;border-radius:50%;background:#fffbea center/cover;border:2.5px solid var(--pc)}
 .card.bad .pic{box-shadow:0 0 0 2.5px var(--danger)}
@@ -177,7 +184,7 @@ aside{display:flex;flex-direction:column;gap:8px;min-width:0}
     <div class="panel">
       <h2>Összehasonlítás</h2>
       <div class="tablewrap"><table class="cmp" id="cmp"></table></div>
-      <p class="note">Pontidő = idő + 30 mp minden sikertelen ellenőrzésért. Feladványonként a kisebb pontidő nyer.</p>
+      <p class="note">Pontidő = idő + 30 mp minden sikertelen ellenőrzésért és minden tippért. Feladványonként a kisebb pontidő nyer.</p>
       <div class="share">
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn primary" id="shareBtn" type="button">Eredményeim küldése</button>
@@ -218,6 +225,8 @@ aside{display:flex;flex-direction:column;gap:8px;min-width:0}
     <div class="stats">
       <div class="stat">Idő <b id="sTime">0:00</b></div>
       <div class="stat">Ellenőrzés <b id="sChecks">0</b></div>
+      <div class="stat">Tipp <b id="sHints">0</b></div>
+      <button class="btn" id="hintBtn" type="button" title="Tipp: következő logikus lépés (+30 mp)">💡 Tipp</button>
       <button class="btn primary" id="checkBtn" type="button">Ellenőrzés</button>
     </div>
   </div>
@@ -247,6 +256,7 @@ aside{display:flex;flex-direction:column;gap:8px;min-width:0}
       </div>
     </main>
     <aside>
+      <div class="panel hintp" id="hintPanel" hidden></div>
       <div class="panel">
         <div class="answer">
           <div class="ansbox" id="ansVic"><span>Áldozat</span><b>—</b></div>
@@ -276,6 +286,7 @@ aside{display:flex;flex-direction:column;gap:8px;min-width:0}
 <div class="modal" id="modal" hidden><div class="panel" id="modalBody"></div></div>
 
 <script src="puzzles.js"></script>
+<script src="hint.js"></script>
 <script>
 "use strict";
 const $=s=>document.querySelector(s);
@@ -411,9 +422,10 @@ function portrait(name){
 
 /* ---------------- results & comparison ---------------- */
 function myResults(p){
-  const r={}; for(const pz of DATA.puzzles){const g=loadProg(p,pz.id); if(g) r[pz.id]={t:Math.round(g.elapsed||0),c:g.failChecks||0,s:g.solved?1:0};} return r;
+  const r={}; for(const pz of DATA.puzzles){const g=loadProg(p,pz.id); if(g) r[pz.id]={t:Math.round(g.elapsed||0),c:g.failChecks||0,s:g.solved?1:0,h:g.hints||0};} return r;
 }
-const score=x=>x.t+PENALTY*x.c;
+const HINTPEN=30;
+const score=x=>x.t+PENALTY*x.c+HINTPEN*(x.h||0);
 function allPlayersResults(){
   const out={}; for(const p of players) out[p]={r:myResults(p),local:true};
   for(const n in rivals) if(!out[n]) out[n]={r:rivals[n].r,local:false,u:rivals[n].u};
@@ -449,7 +461,7 @@ function renderHome(){
     rows+=`<tr><td>${esc(pz.title)}</td>`+names.map(n=>{const x=A[n].r[pz.id];
       if(!x) return `<td>–</td>`;
       if(!x.s) return `<td class="note">folyamatban<br>${fmt(x.t)}</td>`;
-      return `<td class="${solved.length>=2&&winners.includes(n)?"win":""}">${fmt(score(x))}<br><span class="note">${fmt(x.t)} + ${x.c}×${PENALTY}s</span></td>`;}).join("")+`</tr>`;
+      return `<td class="${solved.length>=2&&winners.includes(n)?"win":""}">${fmt(score(x))}<br><span class="note">${fmt(x.t)} + ${x.c}×${PENALTY}s${x.h?` + ${x.h} tipp`:""}</span></td>`;}).join("")+`</tr>`;
   }
   $("#cmp").innerHTML=`<thead><tr><th>Feladvány</th>${names.map(n=>`<th>${esc(n)}${A[n].local?"":` <span class="note" title="Link alapján frissítve">(link)</span>`}</th>`).join("")}</tr></thead><tbody>${rows}</tbody><tfoot><tr><td>Győzelmek</td>${names.map(n=>`<td>${wins[n]}</td>`).join("")}</tr></tfoot>`;
 }
@@ -467,20 +479,20 @@ const ABBR={}, UNABBR={};
 function encodeResults(name,res){
   const parts=[];
   for(const id in res){ const m=id.match(/^(.+)-(\d+)$/); if(!m||!ABBR[m[1]]) continue; const x=res[id];
-    parts.push(ABBR[m[1]]+m[2]+"."+x.t.toString(36)+"."+x.c.toString(36)+(x.s?"":".0")); }
+    parts.push(ABBR[m[1]]+m[2]+"."+x.t.toString(36)+"."+x.c.toString(36)+(x.s?"":".0")+(x.h?".h"+x.h.toString(36):"")); }
   return "2"+b64e(name+"\n"+Date.now().toString(36)+"\n"+parts.join(","));
 }
 function encodeResults3(name,res){
   const parts=[];
   for(const id in res){ const m=id.match(/^(.+)-(\d+)$/); if(!m||!ABBR[m[1]]) continue; const x=res[id];
-    parts.push(ABBR[m[1]]+m[2]+"."+x.t.toString(36)+"."+x.c.toString(36)+(x.s?"":".0")); }
+    parts.push(ABBR[m[1]]+m[2]+"."+x.t.toString(36)+"."+x.c.toString(36)+(x.s?"":".0")+(x.h?".h"+x.h.toString(36):"")); }
   return "3"+encodeURIComponent(name).replace(/~/g,"%7E")+"~"+Date.now().toString(36)+"~"+parts.join("_");
 }
 function decodeResults(code){
   if(code[0]==="3"){
     const [n,u,body]=code.slice(1).split("~"); const r={};
-    for(const p of (body?body.split("_"):[])){ const [head,t,c,s]=p.split("."); const m=head.match(/^([a-z]+)(\d+)$/); if(!m||!UNABBR[m[1]]) continue;
-      r[UNABBR[m[1]]+"-"+m[2]]={t:parseInt(t,36),c:parseInt(c,36),s:s==="0"?0:1}; }
+    for(const p of (body?body.split("_"):[])){ const [head,t,c,...rest]=p.split("."); const m=head.match(/^([a-z]+)(\d+)$/); if(!m||!UNABBR[m[1]]) continue;
+      const hf=rest.find(x=>x[0]==="h"); r[UNABBR[m[1]]+"-"+m[2]]={t:parseInt(t,36),c:parseInt(c,36),s:rest.includes("0")?0:1,h:hf?parseInt(hf.slice(1),36):0}; }
     return {n:decodeURIComponent(n),u:parseInt(u,36),r};
   }
   if(code[0]==="2"){
@@ -493,12 +505,12 @@ function decodeResults(code){
 }
 function shareText(pid){
   const res=myResults(me), url=location.origin+location.pathname+"#r="+encodeResults3(me,res);
-  const sq=x=>!x?"⬜":!x.s?"⬛":x.c?"🟨":"🟩";
+  const sq=x=>!x?"⬜":!x.s?"⬛":(x.c||x.h)?"🟨":"🟩";
   const LV=DATA.levels||[...new Set(DATA.puzzles.map(p=>p.difficulty))];
   const w=Math.max(...LV.map(l=>l.length));
   const lines=[`🔎 Gridlock — ${me}`];
   if(pid&&res[pid]&&res[pid].s){ const pz=DATA.puzzles.find(p=>p.id===pid), x=res[pid];
-    lines.push(`${pz.title} megoldva ⏱ ${fmt(x.t)}${x.c?` · ${x.c} hibás ellenőrzés`:" · hibátlanul"}`); }
+    lines.push(`${pz.title} megoldva ⏱ ${fmt(x.t)}${x.c?` · ${x.c} hibás ellenőrzés`:""}${x.h?` · ${x.h} tipp`:""}${!x.c&&!x.h?" · hibátlanul, tipp nélkül":""}`); }
   lines.push("");
   for(const lv of LV){ const ps=DATA.puzzles.filter(p=>p.difficulty===lv); lines.push(lv.padEnd(w," ")+"  "+ps.map(p=>sq(res[p.id])).join("")); }
   const solved=Object.values(res).filter(x=>x.s), tot=solved.reduce((a,x)=>a+score(x),0);
@@ -535,6 +547,7 @@ function openGame(id){
   const COLOR={}; people.forEach((n,i)=>COLOR[n]=n===VICTIM?"#555":PALETTE[i]);
   const IMG={}; people.forEach(n=>IMG[n]=portrait(n));
   const saved=loadProg(me,id);
+  hideHint();
   G={pz,M,N,OBJ,people,COLOR,IMG,area:(r,c)=>M.rows[r-1][c-1],
      st:Object.assign({pos:{},marks:{},cand:{},elapsed:0,checks:0,failChecks:0,undos:0,solved:false,sel:null,tool:"sketch",shade:true,block:true,hl:true,zoom:1},saved||{})};
   G.st.tool="sketch"; undoStack=[]; redoStack=[];
@@ -590,6 +603,7 @@ function render(){
     if(!who&&st.cand[k]&&!(st.shade&&(usedR.has(r)||usedC.has(c)))) html+=`<div class="cands">${[...st.cand[k]].sort().map(L=>{const n=G.byL[L]; return `<i class="${n===st.sel?"me":""}${st.pos[n]?" done":""}" style="--pc:${G.COLOR[n]}">${esc(L)}</i>`;}).join("")}</div>`;
     if(d._h!==html){d.innerHTML=html; d._h=html;}
     d.classList.toggle("blocked",!!st.block&&isBlocked(k));
+    d.classList.toggle("hintcell",!!(HINT&&HINT.cells&&HINT.cells.has(k)&&(!who||HINT.wrong))); d.classList.toggle("hinttarget",!!(HINT&&HINT.reveal&&HINT.target===k));
     d.classList.toggle("hlobj",HL.obj.has(k)); d.classList.toggle("hlarea",HL.ar.has(k));
   }
   lastPlaced=null;
@@ -602,7 +616,7 @@ function render(){
   if(v){const a=G.area(v[0],v[1]); const inA=G.people.filter(n=>n!==VICTIM&&st.pos[n]&&G.area(st.pos[n][0],st.pos[n][1])===a); killer=inA.length===1?inA[0]:inA.length>1?"?":null;}
   $("#ansVic").classList.toggle("set",!!v); $("#ansKill").classList.toggle("set",!!killer);
   $("#ansVic b").textContent=v?`R${v[0]} C${v[1]}`:"—"; $("#ansKill b").textContent=killer||"—";
-  $("#sChecks").textContent=st.checks;
+  $("#sChecks").textContent=st.checks; $("#sHints").textContent=st.hints||0; $("#hintBtn").classList.toggle("off",!!st.solved);
   $("#undoBtn").classList.toggle("off",!undoStack.length); $("#redoBtn").classList.toggle("off",!redoStack.length);
   { const all=G.people.every(n=>st.pos[n]); const cb=$("#checkBtn"); cb.classList.toggle("off",!all||st.solved);
     cb.title=all?"":`Még ${G.people.filter(n=>!st.pos[n]).length} szereplőt kell elhelyezni`; } $("#sTime").textContent=fmt(st.elapsed);
@@ -620,7 +634,7 @@ function renderStatus(){
   else if(st.tool==="sketch") s.innerHTML=`Vázlat: <b>${esc(st.sel)} (${esc(G.letter(st.sel))})</b> — koppintás: lehetséges hely · hosszú nyomás: biztos.`;
   else s.innerHTML={x:"Kizárás — kattints vagy húzz a mezőkön.",erase:"Radír — jelölés, betű vagy bábu törlése."}[st.tool];
 }
-function placeSure(r,c,n){G.st.pos[n]=[r,c]; delete G.st.marks[r+","+c]; lastPlaced=n;
+function placeSure(r,c,n){G.st.pos[n]=[r,c]; delete G.st.marks[r+","+c]; lastPlaced=n; if(HINT) hideHint();
   const L=G.letter(n);
   for(const k in G.st.cand){ const [rr,cc]=k.split(",").map(Number);
     if(rr===r||cc===c) delete G.st.cand[k];
@@ -719,6 +733,44 @@ function askReset(){ if(locked()) return;
   $("#resetWrap").innerHTML=`<span class="confirm">Törlöd a táblát? (az idő megmarad) <button class="btn danger" id="rYes" type="button">Igen</button><button class="btn" id="rNo" type="button">Mégse</button></span>`;
   $("#rYes").onclick=()=>{snap(); G.st.pos={}; G.st.marks={}; G.st.cand={}; render(); showReset();};
   $("#rNo").onclick=showReset;}
+let HINT=null;
+function hideHint(){ HINT=null; $("#hintPanel").hidden=true; }
+function addHintPenalty(){ G.st.hints=(G.st.hints||0)+1; }
+function showHintPanel(html){ const p=$("#hintPanel"); p.innerHTML=html; p.hidden=false; p.scrollIntoView({block:"nearest",behavior:"smooth"}); }
+$("#hintBtn").onclick=()=>{
+  if(!G||G.st.solved) return; const st=G.st;
+  const placed=G.people.filter(n=>st.pos[n]);
+  const wrong=placed.filter(n=>sha256(`${G.pz.id}|${n}|${st.pos[n][0]},${st.pos[n][1]}`).slice(0,20)!==G.pz.check[n]);
+  addHintPenalty();
+  if(wrong.length){
+    HINT={cells:new Set(),wrong};
+    showHintPanel(`<h3>💡 Tipp <span class="note">+${HINTPEN} mp</span></h3><div><b>A lerakott szereplők közül ${wrong.length===1?"egy":wrong.length} rossz helyen van.</b> Amíg ez így marad, a következtetések félrevisznek.</div>
+      <div class="row"><button class="btn" id="hReveal" type="button">Ki az? (+${HINTPEN} mp)</button><button class="btn" id="hClose" type="button">Bezárás</button></div>`);
+    $("#hReveal").onclick=()=>{ addHintPenalty(); HINT.cells=new Set(wrong.map(n=>st.pos[n].join(","))); $("#hReveal").remove();
+      $("#hintPanel").insertAdjacentHTML("beforeend",`<div>Rossz helyen: <b>${wrong.map(esc).join(", ")}</b> (kék kerettel jelölve).</div>`); render(); };
+    $("#hClose").onclick=()=>{hideHint(); render();}; render(); return;
+  }
+  const fixed={}; placed.forEach(n=>fixed[n]=st.pos[n]);
+  const h=GridlockHint.nextHint(G.M,G.pz,fixed);
+  if(!h.target){ HINT=null; showHintPanel(`<h3>💡 Tipp</h3><div>Ebből az állásból nem találtam további logikai lépést.</div><div class="row"><button class="btn" id="hClose" type="button">Bezárás</button></div>`); $("#hClose").onclick=()=>{hideHint(); render();}; render(); return; }
+  const steps=h.steps.filter(s=>!(s.tech==="Sor és oszlop"&&s.who.every(n=>fixed[n])));
+  const shown=steps.slice(-3), more=steps.length-shown.length;
+  const main=(steps.length?steps.reduce((a,s)=>RANK[s.tech]>RANK[a.tech]?s:a,steps[0]):{tech:"Közvetlen nyom"}).tech;
+  const last=shown[shown.length-1];
+  HINT={cells:new Set(last?last.cells:[]),target:h.target.cell,reveal:false};
+  const t=h.target.name;
+  showHintPanel(`<h3>💡 ${esc(main)} <span class="note">+${HINTPEN} mp</span></h3>
+    <div>Most <b>${esc(t)}</b> helyét lehet kikövetkeztetni.</div>
+    ${shown.length?`<ol>${more?`<li>… előtte ${more} egyszerűbb lépés</li>`:""}${shown.map(s=>`<li><b>${esc(s.tech)}:</b> ${esc(s.msg)}</li>`).join("")}</ol>`:""}
+    <div class="note">A kék keret a legutóbbi lépésben érintett mezőket jelöli.</div>
+    <div class="row"><button class="btn" id="hReveal" type="button">Mutasd a mezőt (+${HINTPEN} mp)</button><button class="btn" id="hSel" type="button">${esc(t)} kijelölése</button><button class="btn" id="hClose" type="button">Bezárás</button></div>`);
+  $("#hReveal").onclick=()=>{ addHintPenalty(); HINT.reveal=true; HINT.cells=new Set(); $("#hReveal").remove(); const [r,c]=h.target.cell.split(",");
+    $("#hintPanel").insertAdjacentHTML("beforeend",`<div><b>${esc(t)}</b> helye: R${r} C${c} (zölden villog). Tedd le hosszú nyomással.</div>`); render(); };
+  $("#hSel").onclick=()=>{ st.sel=t; render(); };
+  $("#hClose").onclick=()=>{hideHint(); render();};
+  render();
+};
+const RANK={"Közvetlen nyom":0,"Sor és oszlop":1,"Egyetlen jelölt":1,"Rejtett egyes":2,"Viszonylagos nyom":3,"Áldozat-szabály":4,"Zárt csoport":5,"Ellentmondás":6};
 $("#checkBtn").onclick=()=>{
   if(!G) return; const st=G.st; if(st.solved){toast("Már megoldva."); return;}
   const placed=G.people.filter(n=>st.pos[n]);
@@ -734,7 +786,7 @@ function celebrate(){
   const st=G.st, v=st.pos[VICTIM], a=G.area(v[0],v[1]);
   const killer=G.people.find(n=>n!==VICTIM&&G.area(st.pos[n][0],st.pos[n][1])===a);
   $("#modalBody").innerHTML=`<div class="big">Megoldva!</div><div>A gyilkos: <b>${esc(killer)}</b> (${esc(G.M.areas[a][1])})</div>
-    <div>Idő: <b>${fmt(st.elapsed)}</b> · Sikertelen ellenőrzés: <b>${st.failChecks}</b><br>Pontidő: <b>${fmt(st.elapsed+PENALTY*st.failChecks)}</b></div>
+    <div>Idő: <b>${fmt(st.elapsed)}</b> · Sikertelen ellenőrzés: <b>${st.failChecks}</b> · Tipp: <b>${st.hints||0}</b><br>Pontidő: <b>${fmt(st.elapsed+PENALTY*st.failChecks+HINTPEN*(st.hints||0))}</b></div>
     <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap"><button class="btn primary" id="mShare" type="button">Eredményeim küldése</button><button class="btn" id="mBack" type="button">Feladványok</button><button class="btn" id="mStay" type="button">Bezárás</button></div>`;
   $("#modal").hidden=false;
   $("#mShare").onclick=()=>{shareLink(G&&G.pz.id);}; $("#mBack").onclick=()=>{$("#modal").hidden=true; goHome();}; $("#mStay").onclick=()=>{$("#modal").hidden=true;};
@@ -744,7 +796,7 @@ function startTimer(){stopTimer(); timerId=setInterval(()=>{ if(!G||G.st.solved|
 function stopTimer(){if(timerId) clearInterval(timerId); timerId=null;}
 document.addEventListener("visibilitychange",()=>{ if(G) save(); });
 window.addEventListener("pagehide",()=>{ if(G) save(); });
-function goHome(){ if(G) save(); stopTimer(); G=null; $("#game").hidden=true; $("#home").hidden=false; renderHome(); }
+function goHome(){ hideHint(); if(G) save(); stopTimer(); G=null; $("#game").hidden=true; $("#home").hidden=false; renderHome(); }
 $("#backBtn").onclick=goHome;
 document.addEventListener("keydown",e=>{
   if(!G||$("#game").hidden) return;

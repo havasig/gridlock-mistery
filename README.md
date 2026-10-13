@@ -15,7 +15,8 @@ A játékmenetet Manuel Garand [Murdoku](https://murdoku.com) feladványai ihlet
 - **Haladás:** minden lépés, jelölés és a stopper automatikusan mentődik a böngészőbe, játékosonként és feladványonként.
 - **Stopper:** csak akkor megy, ha a feladvány nyitva van és az oldal látszik.
 - **Ellenőrzés:** megmondja, hány bábu áll rossz helyen. Minden sikertelen ellenőrzés +30 mp.
-- **Pontidő** = idő + 30 mp × sikertelen ellenőrzések. Feladványonként a kisebb pontidő nyer.
+- **Tipp:** megmutatja a következő logikai lépést és a technikát (egyetlen jelölt, rejtett egyes, zárt csoport, viszonylagos nyom, áldozat-szabály, ellentmondás). Kérésre a mezőt is. Mindkettő +30 mp. Ha valaki rossz helyen van, ezt jelzi először.
+- **Pontidő** = idő + 30 mp × (sikertelen ellenőrzések + tippek). Feladványonként a kisebb pontidő nyer.
 - **Eredmények összevetése külön telefonon:** „Eredményeim küldése” → a másik megnyitja a linket → bekerülsz az ő táblázatába.
 - **Folytatás másik eszközön:** „Haladás átvitele linkkel” → küldd el magadnak → nyisd meg a másik eszközön. Ahol mindkét helyen van haladás, a frissebb marad. Fájlba mentés és visszatöltés is van.
 
